@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T11:35:21.6075817Z",
+  "title": "Design System: Waypoint",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Action blue"
+      },
+      "brand-navy": {
+        "role": "primary",
+        "displayName": "Waypoint navy"
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "White surface"
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Ink"
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Supporting slate"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Brand display",
+        "purpose": "Brand-panel headline."
+      },
+      "headline": {
+        "displayName": "Form headline",
+        "purpose": "Sign-in heading; 30px at mobile widths."
+      },
+      "body": {
+        "displayName": "Supporting body",
+        "purpose": "Form introduction and explanatory copy."
+      },
+      "label": {
+        "displayName": "Field label",
+        "purpose": "External field labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "button-rest",
+        "value": "0 4px 9px #122e4c0c",
+        "purpose": "Primary portal action at rest."
+      },
+      {
+        "name": "button-hover",
+        "value": "0 5px 12px #122e4c18",
+        "purpose": "Primary portal action on hover."
+      },
+      {
+        "name": "input-focus",
+        "value": "0 0 0 3px #1765ab1a",
+        "purpose": "Focused portal input."
+      }
+    ],
+    "motion": [
+      {
+        "name": "primary-state",
+        "value": "background 160ms ease, box-shadow 160ms ease",
+        "purpose": "Primary action hover."
+      },
+      {
+        "name": "role-state",
+        "value": "border-color 150ms ease, background 150ms ease",
+        "purpose": "Demo role hover."
+      },
+      {
+        "name": "pending",
+        "value": "spin 900ms linear infinite",
+        "purpose": "Pending sign-in spinner."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Animation and transition duration when reduced motion is requested; animation iteration count becomes 1."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide",
+        "value": "1700px"
+      },
+      {
+        "name": "compact-desktop",
+        "value": "1100px"
+      },
+      {
+        "name": "mobile",
+        "value": "800px"
+      },
+      {
+        "name": "narrow-mobile",
+        "value": "359px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary sign-in action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width submit action with brief hover and visible focus treatments.",
+      "html": "<button class=\"ds-primary\">Sign in <svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M5 12h14m-7-7 7 7-7 7\"/></svg></button>",
+      "css": ".ds-primary{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:50px;border:1px solid transparent;border-radius:8px;background:var(--primary);color:var(--primary-foreground);font-family:'Public Sans Variable','Public Sans',sans-serif;font-size:14px;font-weight:550;box-shadow:0 4px 9px #122e4c0c;cursor:pointer;transition:background 160ms ease,box-shadow 160ms ease}.ds-primary:hover:not(:disabled){background:#104e88;box-shadow:0 5px 12px #122e4c18}.ds-primary:focus-visible{outline:3px solid #2780c7;outline-offset:4px}.ds-primary:active{transform:translateY(1px)}.ds-primary:disabled{opacity:.5;cursor:wait}@media(prefers-reduced-motion:reduce){.ds-primary{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Outlined workspace action",
+      "kind": "button",
+      "description": "Existing outlined Button variant with workspace touch sizing.",
+      "html": "<button class=\"ds-outline\">Sign out</button>",
+      "css": ".ds-outline{min-height:44px;padding:0 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);color:var(--foreground);font-family:'Public Sans Variable','Public Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer}.ds-outline:hover{background:var(--muted)}.ds-outline:focus-visible{outline:3px solid #2780c7;outline-offset:4px}.ds-outline:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Password-help text action",
+      "kind": "button",
+      "refersTo": "text-action",
+      "description": "Compact secondary action beside a field label.",
+      "html": "<button class=\"ds-text\">Forgot password?</button>",
+      "css": ".ds-text{min-height:26px;padding:3px 0;border:0;background:none;color:var(--primary);font-family:'Public Sans Variable','Public Sans',sans-serif;font-size:12px;font-weight:550;text-underline-offset:4px;cursor:pointer}.ds-text:hover{color:#104a7e;text-decoration:underline}.ds-text:focus-visible{outline:3px solid #2780c7;outline-offset:4px}"
+    },
+    {
+      "name": "Labeled identity field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "External label, leading identity icon, and clear focus halo.",
+      "html": "<div class=\"ds-field\"><label for=\"ds-identity\">Email or employee ID</label><div class=\"ds-wrap\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"8\" r=\"5\"/><path d=\"M20 21a8 8 0 0 0-16 0\"/></svg><input id=\"ds-identity\" placeholder=\"name@waypoint.lk or employee ID\"/></div></div>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:9px;font-family:'Public Sans Variable','Public Sans',sans-serif}.ds-field label{color:#283d54;font-size:13px;font-weight:550;line-height:1.5}.ds-wrap{position:relative}.ds-icon{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:#63788e;pointer-events:none}.ds-field input{width:100%;height:50px;border:1px solid var(--input);border-radius:8px;background:var(--background);padding:0 14px 0 44px;font:inherit;font-size:13px;box-sizing:border-box;caret-color:var(--primary)}.ds-field input::placeholder{color:#63758a;opacity:1}.ds-field input:hover:not(:disabled){border-color:#94a9be}.ds-field input:focus-visible{border-color:var(--primary);box-shadow:0 0 0 3px #1765ab1a;outline:none}.ds-field input[aria-invalid=true]{border-color:var(--destructive)}.ds-field input:disabled{opacity:.5;background:#8091a580}@media(max-width:800px){.ds-field input{font-size:16px}.ds-field input::placeholder{font-size:12px}}"
+    },
+    {
+      "name": "Demo role choice",
+      "kind": "button",
+      "refersTo": "demo-role",
+      "description": "Outlined role selector; pressed state adds blue border and check indicator.",
+      "html": "<button class=\"ds-role\" aria-pressed=\"false\"><svg width=\"21\" height=\"21\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" aria-hidden=\"true\"><rect x=\"8\" y=\"2\" width=\"8\" height=\"4\" rx=\"1\"/><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2m1 8h6m-6 5h6\"/></svg><span><strong>Dispatcher</strong><small>Planning office</small></span></button>",
+      "css": ".ds-role{display:flex;align-items:center;gap:11px;min-height:67px;padding:13px 12px;border:1px solid var(--border);border-radius:8px;background:var(--background);color:#48657f;text-align:left;font-family:'Public Sans Variable','Public Sans',sans-serif;cursor:pointer;transition:border-color 150ms ease,background 150ms ease}.ds-role span{display:flex;flex-direction:column;gap:5px}.ds-role strong{color:#253d55;font-size:12px;font-weight:550}.ds-role small{color:#65758a;font-size:10px}.ds-role:hover:not(:disabled){background:#f4f8fc;border-color:#86abd0}.ds-role[aria-pressed=true]{background:#eff6fc;border-color:var(--primary)}.ds-role:focus-visible{outline:3px solid #2780c7;outline-offset:4px}@media(prefers-reduced-motion:reduce){.ds-role{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Help note",
+      "kind": "custom",
+      "refersTo": "help-note",
+      "description": "Tinted explanatory note inside password help.",
+      "html": "<div class=\"ds-note\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M3 14v-3a9 9 0 0 1 18 0v3m-18-2h4v7H3zm14 0h4v7h-4zm4 7a3 3 0 0 1-3 3h-3\"/></svg><span>For an operational account, contact your dispatch desk.</span></div>",
+      "css": ".ds-note{display:flex;align-items:center;gap:10px;padding:14px;border-radius:8px;background:var(--secondary);color:var(--secondary-foreground);font-family:'Public Sans Variable','Public Sans',sans-serif;font-size:13px;line-height:1.6}.ds-note svg{flex-shrink:0}"
+    }
+  ],
+  "narrative": {
+    "overview": "Waypoint uses the approved navy and blue identity, Public Sans, precise borders, and restrained corners. The implemented interface puts readable task controls on light surfaces and uses the navy brand surface for recognition and context. This document records the current sign-in portal and role landing scaffolds; it does not imply a completed operational component library.",
+    "keyCharacteristics": [
+      "Clear labels and measured spacing.",
+      "Blue actions against white surfaces.",
+      "Navy brand context with lighter supporting text.",
+      "Labeled icons and visible keyboard focus."
+    ],
+    "rules": [],
+    "dos": [
+      "Do reuse Public Sans and the navy/blue identity.",
+      "Do keep labels, messages, and icons alongside meaningful state colors.",
+      "Do preserve visible focus and the mobile input size.",
+      "Do document demo and scaffold boundaries clearly."
+    ],
+    "donts": [
+      "Don't substitute a new palette or decorative font for the approved identity.",
+      "Don't treat the lifecycle diagram as navigation or live delivery status.",
+      "Don't describe unimplemented operational components as established patterns."
+    ]
+  }
+}

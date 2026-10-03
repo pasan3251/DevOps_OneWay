@@ -1,0 +1,16 @@
+/reference/
+/node_modules/
+**/node_modules/
+**/.next/
+**/out/
+**/*.tsbuildinfo
+.env*
+!.env.example
+!.env.*.example
+.playwright-cli/
+output/
+.impeccable/review/
+.impeccable/build/
+*.log
+.DS_Store
+Thumbs.db
