@@ -101,9 +101,7 @@ export function DriverRouteView({ route, onOpenStop }: DriverRouteViewProps) {
             </div>
             <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
               <div
-                className={`h-1.5 rounded-full ${
-                  weightPercent > 90 ? "bg-amber-600" : "bg-primary"
-                }`}
+                className="h-1.5 rounded-full bg-primary"
                 style={{ width: `${weightPercent}%` }}
               />
             </div>
@@ -117,9 +115,7 @@ export function DriverRouteView({ route, onOpenStop }: DriverRouteViewProps) {
             </div>
             <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
               <div
-                className={`h-1.5 rounded-full ${
-                  volumePercent > 90 ? "bg-amber-600" : "bg-teal-600"
-                }`}
+                className="h-1.5 rounded-full bg-primary"
                 style={{ width: `${volumePercent}%` }}
               />
             </div>
@@ -131,7 +127,7 @@ export function DriverRouteView({ route, onOpenStop }: DriverRouteViewProps) {
       <div className="driver-card bg-muted/30 p-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-            <Layers size={14} className="text-teal-700 dark:text-teal-400" />
+            <Layers size={14} className="text-primary" />
             LIFO Reverse Loading Sequence
           </span>
           <button
@@ -151,7 +147,7 @@ export function DriverRouteView({ route, onOpenStop }: DriverRouteViewProps) {
         )}
 
         <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] mt-2">
-          <div className="p-1.5 rounded border border-teal-300 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/40 text-teal-950 dark:text-teal-200">
+          <div className="p-1.5 rounded border border-border bg-secondary text-foreground">
             <span className="font-bold block">Rear Doors</span>
             <span>Stop 1 (First Out)</span>
           </div>
@@ -200,11 +196,11 @@ export function DriverRouteView({ route, onOpenStop }: DriverRouteViewProps) {
                       <div
                         className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
                           isCompleted
-                            ? "bg-teal-600 text-white"
+                            ? "bg-primary text-primary-foreground"
                             : isCurrent
-                              ? "bg-primary text-white"
+                              ? "bg-primary text-primary-foreground"
                               : isException
-                                ? "bg-destructive text-white"
+                                ? "bg-destructive text-primary-foreground"
                                 : "bg-muted text-muted-foreground border border-border"
                         }`}
                       >
@@ -215,7 +211,7 @@ export function DriverRouteView({ route, onOpenStop }: DriverRouteViewProps) {
                         <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
                           {stop.outlet}
                           {stop.orders.length > 1 && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 font-normal">
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground font-normal">
                               Dual Order
                             </span>
                           )}
@@ -237,7 +233,7 @@ export function DriverRouteView({ route, onOpenStop }: DriverRouteViewProps) {
                   {/* Window & Cargo Pill Line */}
                   <div className="flex items-center justify-between text-[11px] pt-2 border-t border-border/60 text-muted-foreground">
                     <span className="flex items-center gap-1 font-mono">
-                      <Clock size={12} className="text-amber-600" />
+                      <Clock size={12} className="text-muted-foreground" />
                       {formatMinutesToTime(stop.effectiveWindow[0])} –{" "}
                       {formatMinutesToTime(stop.effectiveWindow[1])}
                     </span>

@@ -211,7 +211,7 @@ export function ProofOfDeliverySheet({
                 }}
                 className={`py-2 px-1 text-xs font-semibold rounded-lg border text-center transition-colors ${
                   outcome === "full"
-                    ? "bg-teal-50 dark:bg-teal-950/60 border-teal-600 text-teal-800 dark:text-teal-200 ring-1 ring-teal-600"
+                    ? "bg-secondary border-border text-foreground ring-1 ring-border"
                     : "bg-card border-border text-foreground hover:bg-muted"
                 }`}
               >
@@ -223,7 +223,7 @@ export function ProofOfDeliverySheet({
                 onClick={() => setOutcome("partial")}
                 className={`py-2 px-1 text-xs font-semibold rounded-lg border text-center transition-colors ${
                   outcome === "partial"
-                    ? "bg-amber-50 dark:bg-amber-950/60 border-amber-600 text-amber-900 dark:text-amber-200 ring-1 ring-amber-600"
+                    ? "bg-secondary border-border text-foreground ring-1 ring-border"
                     : "bg-card border-border text-foreground hover:bg-muted"
                 }`}
               >
@@ -235,7 +235,7 @@ export function ProofOfDeliverySheet({
                 onClick={() => setOutcome("damaged")}
                 className={`py-2 px-1 text-xs font-semibold rounded-lg border text-center transition-colors ${
                   outcome === "damaged"
-                    ? "bg-red-50 dark:bg-red-950/60 border-red-600 text-red-900 dark:text-red-200 ring-1 ring-red-600"
+                    ? "bg-secondary border-border text-foreground ring-1 ring-border"
                     : "bg-card border-border text-foreground hover:bg-muted"
                 }`}
               >
@@ -382,7 +382,7 @@ export function ProofOfDeliverySheet({
               <button
                 type="button"
                 onClick={triggerMockCamera}
-                className="text-xs text-teal-700 dark:text-teal-400 font-semibold flex items-center gap-1"
+                className="text-xs text-primary font-semibold flex items-center gap-1"
               >
                 <Camera size={13} />
                 Snap Photo
@@ -425,8 +425,8 @@ export function ProofOfDeliverySheet({
           </div>
 
           {outcome !== "full" && (
-            <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-600" />
+            <div className="p-2.5 rounded-lg bg-muted border border-border text-foreground text-xs flex items-start gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5 text-muted-foreground" />
               <span>
                 Discrepancy notice will be automatically dispatched to Peliyagoda Planning Desk and Store Portal upon sync.
               </span>
@@ -446,7 +446,7 @@ export function ProofOfDeliverySheet({
             <Button
               type="submit"
               disabled={!recipientName.trim()}
-              className="flex-1 h-11 bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-semibold flex items-center justify-center gap-2"
+              className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2"
             >
               <Check size={16} />
               Confirm Delivery

@@ -64,7 +64,7 @@ export function DriverBottomNav({
         <span>Vehicle</span>
         {unsyncedCount > 0 && (
           <span
-            className="driver-nav-badge !bg-amber-600"
+            className="driver-nav-badge"
             title={`${unsyncedCount} offline items queued for sync`}
           >
             {unsyncedCount}

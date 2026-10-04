@@ -47,7 +47,7 @@ export function PreTripModal({
 
         <div className="flex items-center justify-between pb-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300">
+            <div className="p-2 rounded-lg bg-muted text-foreground">
               <ShieldCheck size={20} />
             </div>
             <div>
@@ -126,7 +126,7 @@ export function PreTripModal({
             </label>
 
             {vehicle.chilled && (
-              <label className="flex items-center gap-3 p-3 rounded-lg border border-teal-200 dark:border-teal-900 bg-teal-50/50 dark:bg-teal-950/20 cursor-pointer">
+              <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-secondary cursor-pointer">
                 <input
                   type="checkbox"
                   checked={reeferTempVerified}
@@ -134,8 +134,8 @@ export function PreTripModal({
                   className="w-4 h-4 accent-primary rounded"
                 />
                 <div className="text-xs">
-                  <span className="font-bold block text-teal-950 dark:text-teal-200 flex items-center gap-1.5">
-                    <Thermometer size={14} className="text-teal-600" />
+                  <span className="font-bold block text-foreground flex items-center gap-1.5">
+                    <Thermometer size={14} className="text-primary" />
                     Reefer Cooling Sensor: {vehicle.reeferTemperatureC.toFixed(1)}°C (Target: 2°C - 4°C)
                   </span>
                   <span className="text-muted-foreground text-[11px]">
@@ -154,7 +154,7 @@ export function PreTripModal({
               />
               <div className="text-xs">
                 <span className="font-bold block text-foreground flex items-center gap-1.5">
-                  <Fuel size={14} className="text-amber-600" />
+                  <Fuel size={14} className="text-muted-foreground" />
                   Fuel Quota Allowance: {vehicle.fuelRemainingLiters}L Remaining
                 </span>
                 <span className="text-muted-foreground text-[11px]">

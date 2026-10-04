@@ -80,7 +80,7 @@ export function DriverHistoryView({
           >
             <span>Sync Queue</span>
             {unsyncedCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center">
+              <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
                 {unsyncedCount}
               </span>
             )}
@@ -151,7 +151,7 @@ export function DriverHistoryView({
                         <span className="font-bold text-sm text-foreground">
                           {trip.tripId}
                         </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 font-semibold">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground font-semibold">
                           {trip.brand} · {trip.district}
                         </span>
                       </div>
@@ -169,7 +169,7 @@ export function DriverHistoryView({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold font-mono text-teal-700 dark:text-teal-400">
+                      <span className="text-xs font-bold font-mono text-foreground">
                         {trip.deliveredCount}/{trip.stopsCount} Delivered
                       </span>
                       {isExpanded ? (
@@ -215,7 +215,7 @@ export function DriverHistoryView({
                           className={`font-bold ${
                             trip.exceptionCount > 0
                               ? "text-destructive"
-                              : "text-teal-700 dark:text-teal-400"
+                              : "text-foreground"
                           }`}
                         >
                           {trip.exceptionCount} recorded
@@ -242,7 +242,7 @@ export function DriverHistoryView({
               size="sm"
               disabled={!effectiveOnline || isSyncing || unsyncedCount === 0}
               onClick={onTriggerSync}
-              className="text-xs h-8 bg-teal-700 hover:bg-teal-800 text-white font-semibold flex items-center gap-1.5"
+              className="text-xs h-8 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center gap-1.5"
             >
               <RefreshCw
                 size={12}
@@ -254,9 +254,9 @@ export function DriverHistoryView({
 
           <div className="p-2.5 rounded-lg bg-muted/60 border border-border text-xs text-muted-foreground leading-relaxed flex items-start gap-2">
             {effectiveOnline ? (
-              <Wifi size={15} className="text-teal-600 shrink-0 mt-0.5" />
+              <Wifi size={15} className="text-foreground shrink-0 mt-0.5" />
             ) : (
-              <WifiOff size={15} className="text-amber-600 shrink-0 mt-0.5" />
+              <WifiOff size={15} className="text-muted-foreground shrink-0 mt-0.5" />
             )}
             <span>
               {effectiveOnline
@@ -284,12 +284,12 @@ export function DriverHistoryView({
 
                 <div className="shrink-0 text-right">
                   {item.synced ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-foreground bg-secondary px-2 py-0.5 rounded-full border border-border">
                       <CheckCircle2 size={12} />
                       Synced
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full animate-pulse">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border animate-pulse">
                       <RefreshCw size={12} />
                       Pending
                     </span>

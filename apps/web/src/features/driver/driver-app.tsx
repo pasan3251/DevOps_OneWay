@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { WifiOff, AlertCircle } from "lucide-react";
 import "./driver.css";
+import "@/features/dispatcher/monochrome.css";
 
 import { useDriverState } from "./driver-state";
 import type { StopItem, ProofOfDeliveryRecord, StopExceptionRecord, PreTripChecklist } from "./driver-types";
@@ -87,7 +88,7 @@ export function DriverApp() {
             </span>
           </div>
           {unsyncedCount > 0 && (
-            <span className="font-mono text-[11px] bg-red-100 dark:bg-red-950/80 px-2 py-0.5 rounded border border-red-300 dark:border-red-800">
+            <span className="font-mono text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded border border-border">
               {unsyncedCount} queued
             </span>
           )}

@@ -79,6 +79,8 @@
 
 .sign-in-page,
 .workspace-page,
-.help-dialog {
+.help-dialog,
+.driver-app-shell,
+.driver-viewport-wrapper {
   filter: grayscale(1);
 }
