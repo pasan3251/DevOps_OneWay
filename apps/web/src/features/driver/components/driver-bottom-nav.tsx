@@ -1,8 +1,8 @@
 "use client";
 
-import { Home, MapPin, History, Truck } from "lucide-react";
+import { Home, MapPin, History } from "lucide-react";
 
-export type DriverNavTab = "home" | "route" | "history" | "profile";
+export type DriverNavTab = "home" | "route" | "history";
 
 interface DriverBottomNavProps {
   currentTab: DriverNavTab;
@@ -51,17 +51,7 @@ export function DriverBottomNav({
         aria-current={currentTab === "history" ? "page" : undefined}
       >
         <History size={20} />
-        <span>History</span>
-      </button>
-
-      <button
-        type="button"
-        className={`driver-nav-item ${currentTab === "profile" ? "is-active" : ""}`}
-        onClick={() => onSelectTab("profile")}
-        aria-current={currentTab === "profile" ? "page" : undefined}
-      >
-        <Truck size={20} />
-        <span>Vehicle</span>
+        <span>Records</span>
         {unsyncedCount > 0 && (
           <span
             className="driver-nav-badge"

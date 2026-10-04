@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { WifiOff, AlertCircle } from "lucide-react";
+import { WifiOff } from "lucide-react";
 import "./driver.css";
 import "@/features/dispatcher/monochrome.css";
 
@@ -14,7 +14,7 @@ import { DriverHome } from "./views/driver-home";
 import { DriverRouteView } from "./views/driver-route-view";
 import { DriverStopDetail } from "./views/driver-stop-detail";
 import { DriverHistoryView } from "./views/driver-history-view";
-import { DriverProfileView } from "./views/driver-profile-view";
+import { DriverOperationsSheet } from "./views/driver-profile-view";
 import { ProofOfDeliverySheet } from "./components/proof-of-delivery-sheet";
 import { ExceptionSheet } from "./components/exception-sheet";
 import { PreTripModal } from "./components/pre-trip-modal";
@@ -23,6 +23,11 @@ import { authService } from "../auth/auth-service";
 
 export function DriverApp() {
   const router = useRouter();
+  const isHydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const {
     route,
     syncQueue,
@@ -54,6 +59,7 @@ export function DriverApp() {
   const [exceptionStop, setExceptionStop] = useState<StopItem | null>(null);
   const [showPreTrip, setShowPreTrip] = useState<boolean>(false);
   const [showDelayModal, setShowDelayModal] = useState<boolean>(false);
+  const [showOperations, setShowOperations] = useState<boolean>(false);
 
   const selectedStop = route.stops.find((s) => s.id === selectedStopId);
   const pendingStopsCount = route.stops.length - completedCount;
@@ -70,6 +76,16 @@ export function DriverApp() {
   const handleCloseStopDetail = () => {
     setSelectedStopId(null);
   };
+
+  if (!isHydrated) {
+    return (
+      <div className="driver-app-shell" aria-busy="true">
+        <div className="driver-viewport-wrapper driver-loading-shell">
+          <span>Loading today&apos;s assigned run…</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="driver-app-shell">
@@ -100,15 +116,15 @@ export function DriverApp() {
         <DriverHeader
           route={route}
           effectiveOnline={effectiveOnline}
-          isSimulatedOffline={isSimulatedOffline}
-          onToggleOffline={toggleSimulatedOffline}
-          onOpenPreTrip={() => setShowPreTrip(true)}
+          unsyncedCount={unsyncedCount}
+          onOpenOperations={() => setShowOperations(true)}
         />
 
         {/* View Switcher based on Selected Stop or Active Tab */}
         {selectedStop ? (
           <DriverStopDetail
             stop={selectedStop}
+            isActive={selectedStop.id === activeStop?.id}
             onBack={handleCloseStopDetail}
             onArrive={arriveAtStop}
             onUnlockHold={unlockWindowHold}
@@ -134,6 +150,7 @@ export function DriverApp() {
             {currentTab === "route" && (
               <DriverRouteView
                 route={route}
+                activeStop={activeStop}
                 onOpenStop={handleOpenStop}
               />
             )}
@@ -148,17 +165,6 @@ export function DriverApp() {
               />
             )}
 
-            {currentTab === "profile" && (
-              <DriverProfileView
-                route={route}
-                effectiveOnline={effectiveOnline}
-                isSimulatedOffline={isSimulatedOffline}
-                unsyncedCount={unsyncedCount}
-                onToggleOffline={toggleSimulatedOffline}
-                onResetDemo={resetDemoState}
-                onSignOut={handleSignOut}
-              />
-            )}
           </>
         )}
 
@@ -218,6 +224,24 @@ export function DriverApp() {
             reportTransitDelay(reason, minutes);
             setShowDelayModal(false);
           }}
+        />
+      )}
+
+      {showOperations && (
+        <DriverOperationsSheet
+          route={route}
+          effectiveOnline={effectiveOnline}
+          isSimulatedOffline={isSimulatedOffline}
+          isSyncing={isSyncing}
+          unsyncedCount={unsyncedCount}
+          onToggleOffline={toggleSimulatedOffline}
+          onTriggerSync={triggerSync}
+          onResetDemo={() => {
+            resetDemoState();
+            setShowOperations(false);
+          }}
+          onSignOut={handleSignOut}
+          onClose={() => setShowOperations(false)}
         />
       )}
     </div>

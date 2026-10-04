@@ -1,20 +1,22 @@
 "use client";
 
 import {
-  MapPin,
-  Clock,
-  Package,
+  AlertTriangle,
   ArrowRight,
-  Phone,
-  ShieldCheck,
-  AlertCircle,
-  Truck,
+  Check,
   CheckCircle2,
+  Clock,
+  MapPin,
   Navigation,
+  Package,
+  RotateCcw,
+  ShieldCheck,
   Thermometer,
+  Truck,
+  WifiOff,
 } from "lucide-react";
 import type { DriverRouteData, StopItem } from "../driver-types";
-import { formatMinutesToTime, formatMinutesDuration } from "../driver-data";
+import { formatMinutesDuration, formatMinutesToTime } from "../driver-data";
 import { Button } from "@/components/ui/button";
 
 interface DriverHomeProps {
@@ -29,6 +31,8 @@ interface DriverHomeProps {
   onCompleteRoute: () => void;
 }
 
+const terminalStatuses = new Set(["delivered", "partial", "exception"]);
+
 export function DriverHome({
   route,
   activeStop,
@@ -40,349 +44,196 @@ export function DriverHome({
   onOpenDelay,
   onCompleteRoute,
 }: DriverHomeProps) {
-  const allStopsCompleted =
-    route.stops.length > 0 &&
-    route.stops.every(
-      (s) => s.status === "delivered" || s.status === "partial" || s.status === "exception",
-    );
-
-  const progressPercent = Math.round(
-    (completedCount / Math.max(1, route.stops.length)) * 100,
+  const progress = Math.round(
+    (completedCount / Math.max(route.stops.length, 1)) * 100,
   );
+  const remainingCartons = route.stops
+    .filter((stop) => !terminalStatuses.has(stop.status))
+    .reduce((sum, stop) => sum + stop.totalCartons, 0);
+  const canDepart = route.loaderClearance.cleared && route.preTripCompleted;
+  const isReturning = route.shiftStatus === "returning";
+  const isComplete = route.shiftStatus === "completed";
 
   return (
-    <div className="driver-main-content">
-      {/* Shift Greeting & Operational Context */}
-      <div className="flex items-center justify-between">
+    <main className="driver-main-content driver-home">
+      <section className="driver-section-heading">
         <div>
-          <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-            Today&apos;s Run · {route.brand} ({route.district})
-          </span>
-          <h1 className="text-xl font-bold text-foreground">
-            {route.driver.name}
-          </h1>
+          <span className="driver-eyebrow">Today · Trip {route.tripNumber} of maximum 2</span>
+          <h1>{route.brand} · {route.district}</h1>
+          <p>{route.tripId} · {route.vehicle.id} · {route.depot} depot</p>
         </div>
-        <div className="text-right">
-          <span className="text-[11px] text-muted-foreground block">
-            Trip {route.tripId}
-          </span>
-          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-primary/10 text-primary">
-            {route.depot} DC
-          </span>
-        </div>
-      </div>
+        <span className={`driver-shift-state ${route.shiftStatus}`}>
+          {route.shiftStatus.replaceAll("_", " ")}
+        </span>
+      </section>
 
-      {/* Pre-Trip Checklist Warning Banner if not yet verified */}
-      {!route.preTripCompleted && (
-        <div className="driver-card bg-secondary/60 border-border p-3">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-md bg-muted text-foreground shrink-0">
-              <ShieldCheck size={18} />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs font-bold text-foreground">
-                Pre-Departure Vehicle Check Required
-              </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                Verify tire pressure, LIFO cargo seals, and reefer temperature before departing {route.depot}.
-              </div>
-            </div>
-            <Button
-              size="sm"
-              onClick={onOpenPreTrip}
-              className="text-xs h-8 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-            >
-              Verify
-            </Button>
+      {unsyncedCount > 0 && (
+        <section className="driver-callout" role="status">
+          <WifiOff size={18} />
+          <div>
+            <strong>{unsyncedCount} field {unsyncedCount === 1 ? "record" : "records"} waiting to sync</strong>
+            <span>Delivery work can continue. Records remain stored on this device.</span>
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Route Delay Notice if Active */}
+      {route.shiftStatus === "assigned" && (
+        <section className="driver-card driver-readiness-card">
+          <div className="driver-card-heading">
+            <div>
+              <span className="driver-eyebrow">Departure readiness</span>
+              <h2>Manifest and vehicle check</h2>
+            </div>
+            <ShieldCheck size={20} />
+          </div>
+          <div className="driver-readiness-row is-complete">
+            <span><Check size={14} /></span>
+            <div>
+              <strong>Loader released the trip</strong>
+              <small>{route.loaderClearance.manifestVersion} · {route.loaderClearance.clearedAt}</small>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`driver-readiness-row ${route.preTripCompleted ? "is-complete" : "is-pending"}`}
+            onClick={onOpenPreTrip}
+          >
+            <span>{route.preTripCompleted ? <Check size={14} /> : "2"}</span>
+            <div>
+              <strong>{route.preTripCompleted ? "Driver check completed" : "Complete driver readiness check"}</strong>
+              <small>Vehicle, seal, fuel and reefer readiness</small>
+            </div>
+            {!route.preTripCompleted && <ArrowRight size={16} />}
+          </button>
+        </section>
+      )}
+
       {route.transitDelayMinutes > 0 && route.delayNotice && (
-        <div className="driver-card bg-secondary/60 border-border p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={16} className="text-destructive shrink-0" />
-              <div>
-                <span className="text-xs font-bold text-destructive">
-                  Transit Delay Reported (+{route.transitDelayMinutes}m)
-                </span>
-                <p className="text-[11px] text-muted-foreground">
-                  {route.delayNotice.reason}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onOpenDelay}
-              className="text-[11px] font-semibold text-destructive underline"
-            >
-              Adjust
-            </button>
+        <section className="driver-callout is-warning" role="status">
+          <AlertTriangle size={18} />
+          <div>
+            <strong>Delay shared with dispatch · +{route.transitDelayMinutes} min</strong>
+            <span>{route.delayNotice.reason}</span>
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Route Progress Snapshot */}
-      <div className="driver-card">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-semibold text-foreground flex items-center gap-1.5">
-            <Truck size={14} className="text-primary" />
-            Route Progress
-          </span>
-          <span className="text-muted-foreground font-mono font-medium">
-            {completedCount} of {route.stops.length} stops ({progressPercent}%)
-          </span>
-        </div>
-
-        {/* Visual Progress Bar */}
-        <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-          <div
-            className="bg-primary h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-
-        {/* Quick Route KPIs */}
-        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border/60 text-center">
-          <div>
-            <span className="text-[10px] text-muted-foreground block">
-              Remaining Cargo
-            </span>
-            <span className="text-xs font-bold font-mono text-foreground">
-              {route.stops
-                .filter((s) => s.status !== "delivered" && s.status !== "partial")
-                .reduce((sum, s) => sum + s.totalCartons, 0)}{" "}
-              Cartons
-            </span>
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground block">
-              Reefer Temp
-            </span>
-            <span className="text-xs font-bold font-mono text-foreground flex items-center justify-center gap-1">
-              <Thermometer size={12} />
-              {route.vehicle.reeferTemperatureC.toFixed(1)}°C
-            </span>
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground block">
-              Shift Budget
-            </span>
-            <span className="text-xs font-bold font-mono text-foreground">
-              {formatMinutesDuration(
-                Math.max(0, route.shiftBudgetMinutes - route.elapsedMinutes),
-              )}{" "}
-              left
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* NEXT IMMEDIATE STOP HERO CARD */}
-      {!allStopsCompleted && activeStop ? (
-        <div className="driver-card driver-card-hero">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center">
-                {activeStop.sequence}
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                Next Stop · LIFO #{activeStop.lifoPosition}
-              </span>
+      {!isComplete && !isReturning && activeStop && route.shiftStatus !== "assigned" && (
+        <section className="driver-card driver-next-stop">
+          <div className="driver-card-heading">
+            <div>
+              <span className="driver-eyebrow">Next required action · Stop {activeStop.sequence}</span>
+              <h2>{activeStop.outlet}</h2>
             </div>
             <span className={`status-chip ${activeStop.status}`}>
-              {activeStop.status.replace("_", " ")}
+              {activeStop.status.replaceAll("_", " ")}
             </span>
           </div>
-
-          <div>
-            <h2 className="text-lg font-bold text-foreground">
-              {activeStop.outlet}
-            </h2>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-              <MapPin size={13} className="shrink-0 text-muted-foreground" />
-              {activeStop.address}
-            </p>
+          <p className="driver-address"><MapPin size={14} /> {activeStop.address}</p>
+          <div className="driver-next-metrics">
+            <div><Clock size={14} /><span>Window<strong>{formatMinutesToTime(activeStop.effectiveWindow[0])}–{formatMinutesToTime(activeStop.effectiveWindow[1])}</strong></span></div>
+            <div><Package size={14} /><span>Handover<strong>{activeStop.totalCartons} cartons</strong></span></div>
+            {route.vehicle.chilled && <div><Thermometer size={14} /><span>Reefer<strong>{route.vehicle.reeferTemperatureC.toFixed(1)}°C</strong></span></div>}
           </div>
-
-          {/* Delivery Window & Arrival Timing */}
-          <div className="p-2.5 rounded-lg bg-card/80 border border-border flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <Clock size={15} className="text-muted-foreground" />
-              <div>
-                <span className="font-semibold block text-foreground">
-                  Delivery Window
-                </span>
-                <span className="text-muted-foreground text-[11px] font-mono">
-                  {formatMinutesToTime(activeStop.effectiveWindow[0])} –{" "}
-                  {formatMinutesToTime(activeStop.effectiveWindow[1])}
-                </span>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] text-muted-foreground block">
-                Target ETA
-              </span>
-              <span className="font-bold text-foreground font-mono">
-                {formatMinutesToTime(activeStop.estimatedArrival)}
-              </span>
-            </div>
-          </div>
-
-          {/* Consignment Overview */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground py-1">
-            <span className="flex items-center gap-1.5 font-medium">
-              <Package size={14} className="text-primary" />
-              {activeStop.totalCartons} packages ({activeStop.totalKg} kg)
-            </span>
-            <span className="text-[11px] font-semibold text-foreground">
-              {activeStop.orders.length > 1
-                ? "Dual Order (Ambient + Chilled)"
-                : activeStop.dockType.replace("_", " ")}
-            </span>
-          </div>
-
-          {/* Action Row */}
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
-            <a
-              href={`tel:${activeStop.contact.phone}`}
-              className="p-2.5 rounded-lg border border-border bg-card text-foreground hover:bg-muted flex items-center justify-center shrink-0"
-              title={`Call ${activeStop.contact.name}`}
-            >
-              <Phone size={16} />
-            </a>
-
-            <a
-              href={`https://maps.google.com/?q=${encodeURIComponent(
-                activeStop.address,
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2.5 rounded-lg border border-border bg-card text-foreground hover:bg-muted flex items-center justify-center shrink-0"
-              title="Open Navigation App"
-            >
-              <Navigation size={16} />
-            </a>
-
-            <Button
-              onClick={() => onOpenStop(activeStop.id)}
-              className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2 text-xs"
-            >
-              <span>View Stop & Execute Handover</span>
-              <ArrowRight size={14} />
+          <div className="driver-action-row">
+            {activeStop.status === "en_route" && (
+              <a
+                className="driver-secondary-action"
+                href={`https://www.google.com/maps/dir/?api=1&destination=${activeStop.coordinates.lat},${activeStop.coordinates.lng}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Navigation size={16} /> Navigate
+              </a>
+            )}
+            <Button onClick={() => onOpenStop(activeStop.id)} className="driver-primary-action">
+              {activeStop.status === "en_route" ? "Open stop" : "Continue handover"}
+              <ArrowRight size={16} />
             </Button>
           </div>
-        </div>
-      ) : allStopsCompleted ? (
-        /* ALL STOPS COMPLETED HERO */
-        <div className="driver-card bg-secondary/60 border-border text-center p-6">
-          <div className="w-12 h-12 rounded-full bg-muted text-foreground flex items-center justify-center mx-auto mb-3">
-            <CheckCircle2 size={28} />
-          </div>
-          <h2 className="text-lg font-bold text-foreground">
-            All Deliveries Completed!
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-            You have executed all {route.stops.length} stops on Route{" "}
-            {route.tripId}. Return to {route.depot} Distribution Center for gate close.
+        </section>
+      )}
+
+      {isReturning && (
+        <section className="driver-card driver-return-card">
+          <div className="driver-return-icon"><RotateCcw size={24} /></div>
+          <span className="driver-eyebrow">All stops resolved</span>
+          <h2>Return to {route.depot} depot</h2>
+          <p>
+            The return journey is part of the trip time budget. Confirm arrival only after the vehicle reaches the depot gate.
           </p>
+          <div className="driver-action-row">
+            <a
+              className="driver-secondary-action"
+              href={`https://www.google.com/maps/dir/?api=1&destination=${route.depotCoordinates.lat},${route.depotCoordinates.lng}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Navigation size={16} /> Navigate to depot
+            </a>
+            <Button onClick={onCompleteRoute} className="driver-primary-action">
+              Confirm depot arrival
+            </Button>
+          </div>
+        </section>
+      )}
 
-          <Button
-            onClick={onCompleteRoute}
-            disabled={route.shiftStatus === "completed"}
-            className="w-full mt-4 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm"
-          >
-            {route.shiftStatus === "completed"
-              ? "Route Closed & Recorded"
-              : `Confirm Return to ${route.depot} DC`}
-          </Button>
+      {isComplete && (
+        <section className="driver-card driver-complete-card">
+          <CheckCircle2 size={30} />
+          <span className="driver-eyebrow">Trip reconciled</span>
+          <h2>{route.tripId} is complete</h2>
+          <p>{completedCount} stops resolved and the vehicle returned to {route.depot}.</p>
+          {route.nextTrip && (
+            <div className="driver-next-trip">
+              <span>Next assignment</span>
+              <strong>{route.nextTrip.tripId} · {route.nextTrip.brand}</strong>
+              <small>
+                {route.nextTrip.releaseStatus === "awaiting_loader"
+                  ? "Waiting for loader clearance. Departure remains locked."
+                  : "Ready for review."}
+              </small>
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="driver-card driver-progress-card">
+        <div className="driver-card-heading">
+          <div>
+            <span className="driver-eyebrow">Run progress</span>
+            <h2>{completedCount} of {route.stops.length} stops resolved</h2>
+          </div>
+          <strong>{progress}%</strong>
         </div>
-      ) : null}
-
-      {/* QUICK TRANSIT TOOLS CARD */}
-      <div className="driver-card">
-        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-          Road & Fleet Operations
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={onOpenDelay}
-            className="p-3 rounded-lg border border-border bg-card hover:bg-muted text-left transition-colors flex items-center gap-2.5"
-          >
-            <div className="p-2 rounded-md bg-muted text-foreground">
-              <Clock size={16} />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-foreground">
-                Report Delay
-              </div>
-              <div className="text-[10px] text-muted-foreground">
-                Monsoon / Traffic
-              </div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenPreTrip}
-            className="p-3 rounded-lg border border-border bg-card hover:bg-muted text-left transition-colors flex items-center gap-2.5"
-          >
-            <div className="p-2 rounded-md bg-muted text-foreground">
-              <ShieldCheck size={16} />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-foreground">
-                Vehicle Check
-              </div>
-              <div className="text-[10px] text-muted-foreground">
-                Tires & LIFO seals
-              </div>
-            </div>
-          </button>
+        <div className="driver-progress-track"><span style={{ width: `${progress}%` }} /></div>
+        <div className="driver-progress-facts">
+          <span><strong>{remainingCartons}</strong> cartons remaining</span>
+          <span><strong>{formatMinutesDuration(Math.max(0, route.shiftBudgetMinutes - route.elapsedMinutes))}</strong> budget left</span>
+          <span><strong>{route.returnDistanceKm.toFixed(1)} km</strong> return leg</span>
         </div>
-      </div>
+      </section>
 
-      {/* STICKY BOTTOM PRIMARY CTA BAR */}
-      <div className="driver-sticky-action-bar">
-        {route.shiftStatus === "assigned" ? (
+      {(route.shiftStatus === "in_transit" || route.shiftStatus === "at_stop") && (
+        <button type="button" className="driver-delay-action" onClick={onOpenDelay}>
+          <AlertTriangle size={17} />
+          <span><strong>Report a road delay</strong><small>Use only while safely stopped</small></span>
+          <ArrowRight size={16} />
+        </button>
+      )}
+
+      {route.shiftStatus === "assigned" && (
+        <div className="driver-sticky-action-bar">
           <Button
             onClick={onStartRoute}
-            className="driver-cta-button bg-primary hover:bg-primary/90 text-primary-foreground"
+            disabled={!canDepart}
+            className="driver-cta-button"
           >
             <Truck size={18} />
-            <span>Depart {route.depot} Depot & Start Route</span>
+            {canDepart ? `Depart ${route.depot} depot` : "Complete readiness check to depart"}
           </Button>
-        ) : activeStop && !allStopsCompleted ? (
-          <Button
-            onClick={() => onOpenStop(activeStop.id)}
-            className="driver-cta-button bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <MapPin size={18} />
-            <span>
-              {activeStop.status === "en_route"
-                ? `Arrive at Stop ${activeStop.sequence}: ${activeStop.outlet}`
-                : activeStop.status === "waiting_window"
-                  ? `Holding for Window (${activeStop.holdingRemainingMinutes}m)`
-                  : `Complete Handover at Stop ${activeStop.sequence}`}
-            </span>
-          </Button>
-        ) : (
-          <Button
-            onClick={onCompleteRoute}
-            disabled={route.shiftStatus === "completed"}
-            className="driver-cta-button bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <CheckCircle2 size={18} />
-            <span>
-              {route.shiftStatus === "completed"
-                ? "Shift Complete · View Summary in History"
-                : `Return to ${route.depot} DC & Day Close`}
-            </span>
-          </Button>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </main>
   );
 }

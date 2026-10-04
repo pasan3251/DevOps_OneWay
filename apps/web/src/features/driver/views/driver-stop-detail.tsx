@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Navigation,
-  FileText,
   Thermometer,
   ShieldCheck,
   ChevronDown,
@@ -22,6 +21,7 @@ import { Button } from "@/components/ui/button";
 
 interface DriverStopDetailProps {
   stop: StopItem;
+  isActive: boolean;
   onBack: () => void;
   onArrive: (stopId: string) => void;
   onUnlockHold: (stopId: string) => void;
@@ -31,6 +31,7 @@ interface DriverStopDetailProps {
 
 export function DriverStopDetail({
   stop,
+  isActive,
   onBack,
   onArrive,
   onUnlockHold,
@@ -106,6 +107,16 @@ export function DriverStopDetail({
       </div>
 
       {/* Operating Window & Early Arrival Holding Box */}
+      {stop.deliveryWindowState === "breach" && (
+        <div className="driver-callout is-warning" role="status">
+          <AlertTriangle size={17} />
+          <div>
+            <strong>Delivery window exceeded by {stop.lateByMinutes} minutes</strong>
+            <span>Continue only if receiving staff are available. This stop will retain an SLA breach marker.</span>
+          </div>
+        </div>
+      )}
+
       {isEarlyHold ? (
         <div className="window-hold-box">
           <div className="flex items-center justify-between">
@@ -129,10 +140,13 @@ export function DriverStopDetail({
 
           <Button
             size="sm"
+            disabled={(stop.holdingRemainingMinutes ?? 1) > 0}
             onClick={() => onUnlockHold(stop.id)}
             className="mt-1 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
           >
-            Receiving Staff Ready · Unlock Handover
+            {(stop.holdingRemainingMinutes ?? 1) > 0
+              ? "Handover locked until window opens"
+              : "Window open · Begin handover"}
           </Button>
         </div>
       ) : (
@@ -355,7 +369,7 @@ export function DriverStopDetail({
 
       {/* STICKY BOTTOM ACTION BAR */}
       <div className="driver-sticky-action-bar">
-        {!isCompleted && !isException && (
+        {isActive && !isCompleted && !isException && (
           <Button
             type="button"
             variant="outline"
@@ -367,7 +381,7 @@ export function DriverStopDetail({
           </Button>
         )}
 
-        {stop.status === "en_route" || stop.status === "scheduled" ? (
+        {isActive && stop.status === "en_route" ? (
           <Button
             onClick={() => onArrive(stop.id)}
             className="flex-1 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-2"
@@ -375,7 +389,7 @@ export function DriverStopDetail({
             <MapPin size={18} />
             <span>Mark Arrived at Outlet</span>
           </Button>
-        ) : isEarlyHold ? (
+        ) : isActive && isEarlyHold ? (
           <Button
             onClick={() => onUnlockHold(stop.id)}
             className="flex-1 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-2"
@@ -383,7 +397,7 @@ export function DriverStopDetail({
             <Clock size={18} />
             <span>Window Open · Begin Handover</span>
           </Button>
-        ) : stop.status === "arrived" || stop.status === "unloading" ? (
+        ) : isActive && (stop.status === "arrived" || stop.status === "unloading") ? (
           <Button
             onClick={() => onOpenPod(stop)}
             className="flex-1 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-2"

@@ -16,7 +16,7 @@ The Driver application is an **operational, in-cab execution tool** designed for
 ## 2. Driver Responsibilities Across the Working Day
 
 ### 2.1 Shift Initialization & Pre-Departure Verification
-- **Sign In & Vehicle Handshake**: Authenticate in the vehicle cab, inspect assigned vehicle credentials (e.g. WP-012, 1,800 kg capacity, Reefer, Peliyagoda DC).
+- **Sign In & Vehicle Handshake**: Authenticate in the vehicle cab and verify the assigned vehicle, refrigeration class, and home depot. Capacity planning remains a dispatcher responsibility.
 - **Manifest Review**: Receive and review the published trip plan from Dispatcher, confirming stop sequence, total payload (kg / m³), and route district.
 - **Loading & Gate Clearance Check**: Verify that warehouse staging and LIFO (Last-In, First-Out) loading are completed and dock clearance has been granted by the Loader.
 - **Thermal & Safety Check**: For refrigerated vehicles carrying Fresh orders, verify that the refrigeration unit temperature is within target bounds (2°C - 4°C for chilled) before departing the depot gate.
@@ -39,8 +39,7 @@ The Driver application is an **operational, in-cab execution tool** designed for
 - **Physical Verification**: Hand over packages to Store Receiving Manager and verify carton counts.
 - **Digital POD Capture**:
   - Store Manager name and designation.
-  - Digital touch-signature.
-  - Photo proof of delivery (dock handover, store entrance, or receipt stamp).
+  - Digital touch-signature or photo proof of delivery (dock handover, store entrance, or receipt stamp).
   - Unloading completion timestamp.
 - **Stop Completion**: Mark stop as `Delivered` and receive instant routing prompt for the next stop.
 

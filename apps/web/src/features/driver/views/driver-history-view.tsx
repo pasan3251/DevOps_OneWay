@@ -2,12 +2,9 @@
 
 import { useState } from "react";
 import {
-  History,
   CheckCircle2,
   Calendar,
   Clock,
-  Package,
-  Weight,
   RefreshCw,
   WifiOff,
   Wifi,
@@ -37,12 +34,6 @@ export function DriverHistoryView({
     history[0]?.tripId || null,
   );
 
-  const totalDeliveredStops = history.reduce(
-    (sum, t) => sum + t.deliveredCount,
-    0,
-  );
-  const totalWeightKg = history.reduce((sum, t) => sum + t.totalKg, 0);
-  const totalCartons = history.reduce((sum, t) => sum + t.totalCartons, 0);
   const unsyncedCount = syncQueue.filter((i) => !i.synced).length;
 
   return (
@@ -51,9 +42,9 @@ export function DriverHistoryView({
       <div className="flex items-center justify-between">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Audit & Reconciliation
+            Field records
           </span>
-          <h1 className="text-xl font-bold text-foreground">Run History</h1>
+          <h1 className="text-xl font-bold text-foreground">Trips and sync</h1>
         </div>
 
         <div className="flex p-0.5 rounded-lg bg-muted border border-border">
@@ -78,49 +69,13 @@ export function DriverHistoryView({
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <span>Sync Queue</span>
+            <span>Field sync</span>
             {unsyncedCount > 0 && (
               <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
                 {unsyncedCount}
               </span>
             )}
           </button>
-        </div>
-      </div>
-
-      {/* Aggregate Shift Performance KPIs */}
-      <div className="driver-card p-3">
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">
-          Shift Performance Summary
-        </span>
-
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="p-2 rounded-lg bg-muted/50 border border-border/60">
-            <span className="text-[10px] text-muted-foreground block">
-              Stops Delivered
-            </span>
-            <span className="text-sm font-bold font-mono text-foreground">
-              {totalDeliveredStops}
-            </span>
-          </div>
-
-          <div className="p-2 rounded-lg bg-muted/50 border border-border/60">
-            <span className="text-[10px] text-muted-foreground block">
-              Total Packages
-            </span>
-            <span className="text-sm font-bold font-mono text-foreground">
-              {totalCartons} ctns
-            </span>
-          </div>
-
-          <div className="p-2 rounded-lg bg-muted/50 border border-border/60">
-            <span className="text-[10px] text-muted-foreground block">
-              Freight Weight
-            </span>
-            <span className="text-sm font-bold font-mono text-foreground">
-              {totalWeightKg.toLocaleString()} kg
-            </span>
-          </div>
         </div>
       </div>
 

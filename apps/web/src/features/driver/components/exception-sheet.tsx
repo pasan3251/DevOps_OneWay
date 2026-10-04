@@ -40,28 +40,10 @@ const EXCEPTION_OPTIONS: Array<{
     description: "Punctured cartons, crushed packaging, or transit leakage.",
   },
   {
-    code: "SHORTAGE_PARTIAL",
-    label: "Manifest Shortage Discrepancy",
-    category: "delivery",
-    description: "Physical unit count lower than digital manifest.",
-  },
-  {
     code: "ACCESS_BLOCKED",
     label: "Dock / Street Access Blocked",
     category: "delivery",
     description: "Road construction, low overhead wires, or impassable approach bridge.",
-  },
-  {
-    code: "VEHICLE_BREAKDOWN",
-    label: "Vehicle Mechanical Breakdown",
-    category: "incident",
-    description: "Engine fault, tire puncture, or reefer cooling malfunction.",
-  },
-  {
-    code: "ROAD_WEATHER_DELAY",
-    label: "Severe Monsoon / Road Disruption",
-    category: "incident",
-    description: "Heavy rainfall, hill country landslide, or flood detour.",
   },
 ];
 
@@ -77,6 +59,7 @@ export function ExceptionSheet({
   );
   const [notes, setNotes] = useState("");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const selectedOption =
     EXCEPTION_OPTIONS.find((opt) => opt.code === selectedCode) ||
@@ -119,6 +102,15 @@ export function ExceptionSheet({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
+    if (!notes.trim()) {
+      setValidationError("Add a short field note describing what happened.");
+      return;
+    }
+    if (!photoPreview) {
+      setValidationError("Photo evidence is required for a failed or refused delivery.");
+      return;
+    }
 
     const record: StopExceptionRecord = {
       code: selectedCode,
@@ -126,14 +118,12 @@ export function ExceptionSheet({
       reasonLabel: selectedOption.label,
       notes: notes.trim() || selectedOption.description,
       affectedCartons:
-        selectedCode === "SHORTAGE_PARTIAL" || selectedCode === "DAMAGED_GOODS"
+        selectedCode === "DAMAGED_GOODS"
           ? affectedCartons
           : undefined,
       photoDataUrl: photoPreview || undefined,
-      reportedAt: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      reportedAt: new Date().toISOString(),
+      geoCoordinates: stop?.coordinates,
     };
 
     onSubmit(record);
@@ -202,8 +192,7 @@ export function ExceptionSheet({
           </div>
 
           {/* Affected Cartons if damage/shortage */}
-          {(selectedCode === "SHORTAGE_PARTIAL" ||
-            selectedCode === "DAMAGED_GOODS") &&
+          {selectedCode === "DAMAGED_GOODS" &&
             stop && (
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted border border-border">
                 <span className="text-xs font-medium text-foreground">
@@ -298,6 +287,10 @@ export function ExceptionSheet({
               </div>
             )}
           </div>
+
+          {validationError && (
+            <p className="driver-form-error" role="alert">{validationError}</p>
+          )}
 
           <div className="pt-2 flex gap-3">
             <Button

@@ -2,7 +2,6 @@ import type { Brand, Depot } from "../dispatcher/planning";
 
 export type ShiftStatus =
   | "assigned"
-  | "departed"
   | "in_transit"
   | "at_stop"
   | "returning"
@@ -18,7 +17,9 @@ export type StopStatus =
   | "partial"
   | "exception";
 
-export type DeliveryOutcome = "full" | "partial" | "damaged" | "refused";
+export type DeliveryOutcome = "full" | "partial";
+
+export type DeliveryWindowState = "on_time" | "watch" | "breach";
 
 export type ExceptionReasonCode =
   | "STORE_CLOSED_UNAVAILABLE"
@@ -79,6 +80,7 @@ export interface StopItem {
   lifoPosition: number; // 1 = at rear doors (first out)
   outlet: string;
   address: string;
+  coordinates: { lat: number; lng: number };
   district: string;
   brand: Brand;
   dockType: "rear_dock" | "street" | "mall_bay";
@@ -102,6 +104,8 @@ export interface StopItem {
   actualArrivalTimestamp?: string;
   actualCompletionTimestamp?: string;
   holdingRemainingMinutes?: number;
+  deliveryWindowState?: DeliveryWindowState;
+  lateByMinutes?: number;
   pod?: ProofOfDeliveryRecord;
   exception?: StopExceptionRecord;
 }
@@ -129,6 +133,7 @@ export interface DriverRouteData {
   tripId: string;
   tripNumber: 1 | 2;
   depot: Depot;
+  depotCoordinates: { lat: number; lng: number };
   vehicle: DriverVehicleTelematics;
   driver: {
     id: string;
@@ -145,12 +150,26 @@ export interface DriverRouteData {
   elapsedMinutes: number;
   shiftStatus: ShiftStatus;
   stops: StopItem[];
+  routeDistanceKm: number;
+  returnDistanceKm: number;
+  loaderClearance: {
+    cleared: boolean;
+    clearedAt?: string;
+    manifestVersion: string;
+  };
   preTripCompleted: boolean;
   transitDelayMinutes: number;
   delayNotice?: {
     reason: string;
     minutes: number;
     timestamp: string;
+  };
+  nextTrip?: {
+    tripId: string;
+    brand: Brand;
+    district: string;
+    plannedDepartureMin: number;
+    releaseStatus: "awaiting_return" | "awaiting_loader" | "ready";
   };
 }
 
@@ -179,6 +198,7 @@ export interface OfflineSyncItem {
   payload: Record<string, unknown>;
   synced: boolean;
   retryCount: number;
+  syncState?: "pending" | "synced" | "conflict";
   error?: string;
 }
 

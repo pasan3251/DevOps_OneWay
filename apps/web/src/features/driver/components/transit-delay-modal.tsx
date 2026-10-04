@@ -37,6 +37,7 @@ export function TransitDelayModal({
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [delayMinutes, setDelayMinutes] = useState(20);
   const [customNote, setCustomNote] = useState("");
+  const [safelyStopped, setSafelyStopped] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +83,18 @@ export function TransitDelayModal({
               Vehicle must be safely stopped or parked curbside before logging delays.
             </span>
           </div>
+
+          <label className="driver-safety-confirmation">
+            <input
+              type="checkbox"
+              checked={safelyStopped}
+              onChange={(event) => setSafelyStopped(event.target.checked)}
+            />
+            <span>
+              <strong>I am safely stopped</strong>
+              <small>Delay reporting is locked while the vehicle is moving.</small>
+            </span>
+          </label>
 
           <div>
             <label className="text-xs font-semibold text-muted-foreground block mb-2">
@@ -167,6 +180,7 @@ export function TransitDelayModal({
             </Button>
             <Button
               type="submit"
+              disabled={!safelyStopped}
               className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2"
             >
               <Check size={16} />

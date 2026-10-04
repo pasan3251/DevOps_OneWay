@@ -15,6 +15,8 @@ import {
   SubmitProofOfDeliveryDto,
   FailStopDto,
   UpdateTelematicsDto,
+  ConfirmDriverReadinessDto,
+  ConfirmDepotReturnDto,
 } from './dto/driver.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -32,6 +34,18 @@ export class DriverController {
   @ApiOperation({ summary: 'Get current assigned active trip and ordered stops for logged in driver' })
   async getActiveTrip(@CurrentUser('id') userId: string) {
     return this.driverService.getActiveTrip(userId);
+  }
+
+  @Post('trips/:id/readiness')
+  @Roles('driver', 'admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Acknowledge manifest, vehicle, fuel, and thermal readiness before departure' })
+  async confirmReadiness(
+    @Param('id') tripId: string,
+    @Body() dto: ConfirmDriverReadinessDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.driverService.confirmReadiness(tripId, dto, userId);
   }
 
   @Post('trips/:id/depart')
@@ -87,9 +101,10 @@ export class DriverController {
   @ApiOperation({ summary: 'Complete trip and return vehicle and driver to available pool' })
   async completeTrip(
     @Param('id') tripId: string,
+    @Body() dto: ConfirmDepotReturnDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.driverService.completeTrip(tripId, userId);
+    return this.driverService.completeTrip(tripId, dto, userId);
   }
 
   @Post('telematics')

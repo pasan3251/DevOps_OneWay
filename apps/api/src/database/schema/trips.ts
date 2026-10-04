@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, numeric, integer, timestamp, date, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, numeric, integer, timestamp, date, uniqueIndex, index, jsonb, boolean } from 'drizzle-orm/pg-core';
 import { depots } from './depots';
 import { vehicles } from './vehicles';
 import { drivers } from './drivers';
@@ -26,6 +26,9 @@ export const trips = pgTable('trips', {
   gatePassToken: varchar('gate_pass_token', { length: 128 }),
   gateClearedBy: uuid('gate_cleared_by').references(() => users.id, { onDelete: 'set null' }),
   gateClearedAt: timestamp('gate_cleared_at', { withTimezone: true }),
+  driverReadyAt: timestamp('driver_ready_at', { withTimezone: true }),
+  driverChecklist: jsonb('driver_checklist'),
+  returnStartedAt: timestamp('return_started_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
@@ -46,6 +49,9 @@ export const tripStops = pgTable('trip_stops', {
   actualArrivalTime: timestamp('actual_arrival_time', { withTimezone: true }),
   actualDepartureTime: timestamp('actual_departure_time', { withTimezone: true }),
   waitTimeMinutes: integer('wait_time_minutes').notNull().default(0),
+  windowHoldUntil: timestamp('window_hold_until', { withTimezone: true }),
+  slaBreach: boolean('sla_breach').notNull().default(false),
+  slaBreachMinutes: integer('sla_breach_minutes').notNull().default(0),
   status: tripStopStatusEnum('status').notNull().default('PENDING'),
   failureReason: varchar('failure_reason', { length: 128 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

@@ -14,13 +14,27 @@ import {
   initialActiveRoute,
   sampleHistoryTrips,
   sampleInitialSyncQueue,
-  formatMinutesToTime,
 } from "./driver-data";
 
-const ROUTE_STORAGE_KEY = "waypoint.driver.route.v1";
-const SYNC_STORAGE_KEY = "waypoint.driver.sync.v1";
-const HISTORY_STORAGE_KEY = "waypoint.driver.history.v1";
+const ROUTE_STORAGE_KEY = "waypoint.driver.route.v3";
+const SYNC_STORAGE_KEY = "waypoint.driver.sync.v3";
+const HISTORY_STORAGE_KEY = "waypoint.driver.history.v3";
 const OFFLINE_OVERRIDE_KEY = "waypoint.driver.offline_override.v1";
+
+function getColomboClock() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Colombo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  return {
+    minutes: hour * 60 + minute,
+    label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+  };
+}
 
 export function useDriverState() {
   const [route, setRoute] = useState<DriverRouteData>(() => {
@@ -65,14 +79,14 @@ export function useDriverState() {
     }
   });
 
-  const [isBrowserOnline, setIsBrowserOnline] = useState<boolean>(true);
+  const [isBrowserOnline, setIsBrowserOnline] = useState<boolean>(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Monitor physical network connectivity
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setIsBrowserOnline(navigator.onLine);
-
     const handleOnline = () => setIsBrowserOnline(true);
     const handleOffline = () => setIsBrowserOnline(false);
 
@@ -133,11 +147,13 @@ export function useDriverState() {
         stopId,
         description,
         payload,
-        synced: effectiveOnline, // automatically synced if online, else queued
+        synced: effectiveOnline,
+        syncState: effectiveOnline ? "synced" : "pending",
         retryCount: 0,
       };
 
-      setSyncQueue((prev) => [item, ...prev]);
+      // The field ledger stays oldest-first so replay order is deterministic.
+      setSyncQueue((prev) => [...prev, item]);
     },
     [effectiveOnline],
   );
@@ -148,7 +164,12 @@ export function useDriverState() {
     setIsSyncing(true);
     setTimeout(() => {
       setSyncQueue((prev) =>
-        prev.map((item) => ({ ...item, synced: true, error: undefined })),
+        prev.map((item) => ({
+          ...item,
+          synced: true,
+          syncState: "synced" as const,
+          error: undefined,
+        })),
       );
       setIsSyncing(false);
     }, 900);
@@ -159,14 +180,16 @@ export function useDriverState() {
     if (effectiveOnline) {
       const hasUnsynced = syncQueue.some((i) => !i.synced);
       if (hasUnsynced) {
-        triggerSync();
+        const timer = window.setTimeout(triggerSync, 0);
+        return () => window.clearTimeout(timer);
       }
     }
   }, [effectiveOnline, syncQueue, triggerSync]);
 
   // 1. Depart Depot / Start Trip
   const startRoute = useCallback(() => {
-    const nowTimeStr = formatMinutesToTime(route.departurePlannedMin);
+    if (!route.loaderClearance.cleared || !route.preTripCompleted) return;
+    const nowTimeStr = getColomboClock().label;
     setRoute((prev) => {
       const nextStops = [...prev.stops];
       if (nextStops[0]) {
@@ -185,14 +208,28 @@ export function useDriverState() {
       `Vehicle ${route.vehicle.id} departed ${route.depot} Depot for ${route.district}`,
       { departureTime: nowTimeStr, vehicleId: route.vehicle.id },
     );
-  }, [enqueueSyncItem, route.departurePlannedMin, route.depot, route.district, route.vehicle.id]);
+  }, [enqueueSyncItem, route.depot, route.district, route.loaderClearance.cleared, route.preTripCompleted, route.vehicle.id]);
 
   // 2. Mark Arrived at Stop
   const arriveAtStop = useCallback(
     (stopId: string) => {
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const { label: timeStr, minutes: currentMinutes } = getColomboClock();
+      const target = route.stops.find((stop) => stop.id === stopId);
+      const currentActive = route.stops.find(
+        (stop) =>
+          stop.status === "en_route" ||
+          stop.status === "arrived" ||
+          stop.status === "waiting_window" ||
+          stop.status === "unloading",
+      );
+      if (
+        route.shiftStatus === "assigned" ||
+        !target ||
+        target.status !== "en_route" ||
+        currentActive?.id !== stopId
+      ) {
+        return;
+      }
 
       setRoute((prev) => {
         const nextStops = prev.stops.map((stop) => {
@@ -203,12 +240,15 @@ export function useDriverState() {
           const remainingHold = isEarly
             ? stop.effectiveWindow[0] - currentMinutes
             : 0;
+          const lateByMinutes = Math.max(0, currentMinutes - stop.effectiveWindow[1]);
 
           return {
             ...stop,
             status: isEarly ? ("waiting_window" as const) : ("arrived" as const),
             actualArrivalTimestamp: timeStr,
             holdingRemainingMinutes: remainingHold,
+            deliveryWindowState: lateByMinutes > 0 ? ("breach" as const) : ("on_time" as const),
+            lateByMinutes,
           };
         });
 
@@ -227,16 +267,17 @@ export function useDriverState() {
         stopId,
       );
     },
-    [enqueueSyncItem, route.stops],
+    [enqueueSyncItem, route.shiftStatus, route.stops],
   );
 
   // 3. Advance from Window Wait to Unloading
   const unlockWindowHold = useCallback(
     (stopId: string) => {
+      const { minutes } = getColomboClock();
       setRoute((prev) => ({
         ...prev,
         stops: prev.stops.map((stop) =>
-          stop.id === stopId
+          stop.id === stopId && minutes >= stop.effectiveWindow[0]
             ? { ...stop, status: "arrived", holdingRemainingMinutes: 0 }
             : stop,
         ),
@@ -244,6 +285,44 @@ export function useDriverState() {
     },
     [],
   );
+
+  // Holding is mandatory, but the action gate unlocks automatically when the
+  // effective outlet/mall window opens.
+  useEffect(() => {
+    const waiting = route.stops.some((stop) => stop.status === "waiting_window");
+    if (!waiting) return;
+    const updateHolds = () => {
+      const { minutes } = getColomboClock();
+      setRoute((prev) => {
+        let changed = false;
+        const stops = prev.stops.map((stop) => {
+          if (stop.status !== "waiting_window") return stop;
+          const remaining = Math.max(0, stop.effectiveWindow[0] - minutes);
+          const nextStatus: StopItem["status"] =
+            remaining === 0 ? "arrived" : "waiting_window";
+          if (
+            remaining === stop.holdingRemainingMinutes &&
+            nextStatus === stop.status
+          ) {
+            return stop;
+          }
+          changed = true;
+          return {
+            ...stop,
+            status: nextStatus,
+            holdingRemainingMinutes: remaining,
+          };
+        });
+        return changed ? { ...prev, stops } : prev;
+      });
+    };
+    const initialTimer = window.setTimeout(updateHolds, 0);
+    const timer = window.setInterval(updateHolds, 30_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
+  }, [route.stops]);
 
   // 4. Complete Stop Delivery with Proof of Delivery
   const completeDelivery = useCallback(
@@ -257,6 +336,9 @@ export function useDriverState() {
 
         const nextStops = [...prev.stops];
         const currentStop = nextStops[stopIndex];
+        if (currentStop.status !== "arrived" && currentStop.status !== "unloading") {
+          return prev;
+        }
         const status = pod.outcome === "full" ? "delivered" : "partial";
 
         nextStops[stopIndex] = {
@@ -310,6 +392,13 @@ export function useDriverState() {
 
         const nextStops = [...prev.stops];
         const currentStop = nextStops[stopIndex];
+        if (
+          currentStop.status !== "arrived" &&
+          currentStop.status !== "unloading" &&
+          currentStop.status !== "en_route"
+        ) {
+          return prev;
+        }
 
         nextStops[stopIndex] = {
           ...currentStop,
@@ -400,8 +489,18 @@ export function useDriverState() {
 
   // 8. Confirm Return to Depot & Close Trip
   const completeRouteAndReturn = useCallback(() => {
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    if (
+      route.shiftStatus !== "returning" ||
+      route.stops.some(
+        (stop) =>
+          stop.status !== "delivered" &&
+          stop.status !== "partial" &&
+          stop.status !== "exception",
+      )
+    ) {
+      return;
+    }
+    const timeStr = getColomboClock().label;
 
     const deliveredStops = route.stops.filter((s) => s.status === "delivered" || s.status === "partial").length;
     const exceptionStops = route.stops.filter((s) => s.status === "exception").length;
@@ -434,10 +533,17 @@ export function useDriverState() {
       completedAt: timeStr,
     };
 
-    setHistory((prev) => [summary, ...prev]);
+    setHistory((prev) =>
+      prev.some((trip) => trip.tripId === summary.tripId)
+        ? prev
+        : [summary, ...prev],
+    );
     setRoute((prev) => ({
       ...prev,
       shiftStatus: "completed",
+      nextTrip: prev.nextTrip
+        ? { ...prev.nextTrip, releaseStatus: "awaiting_loader" }
+        : undefined,
     }));
 
     enqueueSyncItem(

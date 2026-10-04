@@ -3,9 +3,27 @@ import {
   IsNotEmpty,
   IsOptional,
   IsNumber,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsISO8601,
   Min,
   Max,
 } from 'class-validator';
+
+export class ConfirmDriverReadinessDto {
+  @IsBoolean()
+  vehicleRoadworthy!: boolean;
+
+  @IsBoolean()
+  manifestAndSealMatched!: boolean;
+
+  @IsBoolean()
+  fuelConfirmed!: boolean;
+
+  @IsBoolean()
+  reeferTemperatureConfirmed!: boolean;
+}
 
 export class ArriveAtStopDto {
   @IsOptional()
@@ -22,9 +40,24 @@ export class SubmitProofOfDeliveryDto {
   @IsNotEmpty()
   storeRepName!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  storeRepSignatureUrl!: string;
+  storeRepDesignation?: string;
+
+  @IsIn(['FULL', 'PARTIAL'])
+  outcome!: 'FULL' | 'PARTIAL';
+
+  @IsInt()
+  @Min(1)
+  expectedCartons!: number;
+
+  @IsInt()
+  @Min(1)
+  deliveredCartons!: number;
+
+  @IsOptional()
+  @IsString()
+  storeRepSignatureUrl?: string;
 
   @IsOptional()
   @IsString()
@@ -43,16 +76,37 @@ export class SubmitProofOfDeliveryDto {
   @Min(-180)
   @Max(180)
   geoLongitude!: number;
+
+  @IsOptional()
+  @IsISO8601()
+  clientCapturedAt?: string;
 }
 
 export class FailStopDto {
   @IsString()
-  @IsNotEmpty()
+  @IsIn([
+    'STORE_CLOSED_UNAVAILABLE',
+    'DELIVERY_REJECTED',
+    'DAMAGED_GOODS',
+    'ACCESS_BLOCKED',
+  ])
   failureReason!: string;
 
   @IsOptional()
   @IsString()
   driverNotes?: string;
+}
+
+export class ConfirmDepotReturnDto {
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude!: number;
+
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude!: number;
 }
 
 export class UpdateTelematicsDto {

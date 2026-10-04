@@ -8,6 +8,13 @@
       "when": 1791110464568,
       "tag": "0000_parched_marvel_zombies",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791131034903,
+      "tag": "0001_rapid_taskmaster",
+      "breakpoints": true
     }
   ]
 }

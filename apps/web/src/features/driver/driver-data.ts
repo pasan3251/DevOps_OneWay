@@ -28,6 +28,7 @@ export const initialActiveRoute: DriverRouteData = {
   tripId: "TRIP-01",
   tripNumber: 1,
   depot: "Peliyagoda",
+  depotCoordinates: { lat: 6.964, lng: 79.889 },
   vehicle: initialVehicle,
   driver: {
     id: "DRIV001",
@@ -43,6 +44,13 @@ export const initialActiveRoute: DriverRouteData = {
   shiftBudgetMinutes: 270, // Fresh daily budget max
   elapsedMinutes: 35,
   shiftStatus: "assigned", // assigned -> in_transit -> at_stop -> returning -> completed
+  routeDistanceKm: 28.5,
+  returnDistanceKm: 13.8,
+  loaderClearance: {
+    cleared: true,
+    clearedAt: "04:42 AM",
+    manifestVersion: "MNF-TRIP-01-R3",
+  },
   preTripCompleted: false,
   transitDelayMinutes: 0,
   stops: [
@@ -53,6 +61,7 @@ export const initialActiveRoute: DriverRouteData = {
       lifoPosition: 1, // At rear doors (first out)
       outlet: "Fresh · Borella",
       address: "142 Cotta Road, Borella, Colombo 08",
+      coordinates: { lat: 6.915, lng: 79.878 },
       district: "Colombo",
       brand: "Fresh",
       dockType: "rear_dock",
@@ -139,6 +148,7 @@ export const initialActiveRoute: DriverRouteData = {
       lifoPosition: 2, // Mid cargo section
       outlet: "Fresh · Nugegoda",
       address: "84 High Level Road, Nugegoda",
+      coordinates: { lat: 6.869, lng: 79.89 },
       district: "Colombo",
       brand: "Fresh",
       dockType: "street",
@@ -193,6 +203,7 @@ export const initialActiveRoute: DriverRouteData = {
       lifoPosition: 3, // Front bulkhead (last out)
       outlet: "Fresh · Wellawatte",
       address: "51 Galle Road, Wellawatte, Colombo 06",
+      coordinates: { lat: 6.874, lng: 79.861 },
       district: "Colombo",
       brand: "Fresh",
       dockType: "street",
@@ -241,6 +252,13 @@ export const initialActiveRoute: DriverRouteData = {
       status: "scheduled",
     },
   ],
+  nextTrip: {
+    tripId: "TRIP-02",
+    brand: "Style",
+    district: "Colombo",
+    plannedDepartureMin: 600,
+    releaseStatus: "awaiting_return",
+  },
 };
 
 export const sampleHistoryTrips: CompletedTripSummary[] = [
@@ -296,6 +314,7 @@ export const sampleInitialSyncQueue: OfflineSyncItem[] = [
     description: "Pre-departure checklist verified: Tires, LIFO seal, Reefer 3.4°C",
     payload: { checklistCompleted: true, inspector: "DRIV001" },
     synced: true,
+    syncState: "synced",
     retryCount: 0,
   },
 ];

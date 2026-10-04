@@ -138,9 +138,9 @@ export class StoreService {
 
     const inboundDeliveries = inboundStops.map((stop) => {
       let deliveryStatus: 'SCHEDULED' | 'IN_TRANSIT' | 'ARRIVED' | 'DELIVERED' | 'FAILED' = 'SCHEDULED';
-      if (stop.status === 'DELIVERED') {
+      if (stop.status === 'DELIVERED' || stop.status === 'DISCREPANCY_FLAGGED') {
         deliveryStatus = 'DELIVERED';
-      } else if (stop.status === 'ARRIVED' || stop.status === 'UNLOADING') {
+      } else if (stop.status === 'ARRIVED' || stop.status === 'WAITING_WINDOW' || stop.status === 'UNLOADING') {
         deliveryStatus = 'ARRIVED';
       } else if (stop.trip?.status === 'EN_ROUTE') {
         deliveryStatus = 'IN_TRANSIT';
@@ -175,6 +175,7 @@ export class StoreService {
         driverPhone,
         totalItemsCount: stop.order?.totalItemsCount || 0,
         totalWeightKg: stop.order?.totalWeightKg || '0.00',
+        hasPod: Boolean(stop.proofOfDelivery),
         proofOfDelivery: stop.proofOfDelivery
           ? {
               id: stop.proofOfDelivery.id,
@@ -241,9 +242,9 @@ export class StoreService {
       .filter((stop) => !filter?.date || stop.trip?.operatingDate === filter.date)
       .map((stop) => {
         let displayStatus: 'SCHEDULED' | 'IN_TRANSIT' | 'ARRIVED' | 'DELIVERED' | 'FAILED' = 'SCHEDULED';
-        if (stop.status === 'DELIVERED') {
+        if (stop.status === 'DELIVERED' || stop.status === 'DISCREPANCY_FLAGGED') {
           displayStatus = 'DELIVERED';
-        } else if (stop.status === 'ARRIVED' || stop.status === 'UNLOADING') {
+        } else if (stop.status === 'ARRIVED' || stop.status === 'WAITING_WINDOW' || stop.status === 'UNLOADING') {
           displayStatus = 'ARRIVED';
         } else if (stop.trip?.status === 'EN_ROUTE') {
           displayStatus = 'IN_TRANSIT';
@@ -329,7 +330,21 @@ export class StoreService {
       throw new NotFoundException('Specified order was not found for your retail store');
     }
 
-    if (order.status !== 'DELIVERED') {
+    const orderStops = await this.db.query.tripStops.findMany({
+      where: and(
+        eq(schema.tripStops.orderId, order.id),
+        eq(schema.tripStops.outletId, user.outletId),
+      ),
+      with: { proofOfDelivery: true },
+      orderBy: [desc(schema.tripStops.createdAt)],
+      limit: 10,
+    });
+    const completedDelivery = orderStops.some(
+      (stop) =>
+        (stop.status === 'DELIVERED' || stop.status === 'DISCREPANCY_FLAGGED') &&
+        Boolean(stop.proofOfDelivery),
+    );
+    if (order.status !== 'DELIVERED' && !completedDelivery) {
       throw new BadRequestException('A receiving discrepancy can only be reported after the delivery is completed');
     }
 

@@ -66,6 +66,7 @@ export const tripStatusEnum = pgEnum('trip_status', [
   'LOADING',
   'MANIFEST_ISSUED',
   'EN_ROUTE',
+  'RETURNING',
   'COMPLETED',
   'CANCELLED',
 ]);
@@ -73,10 +74,16 @@ export const tripStatusEnum = pgEnum('trip_status', [
 export const tripStopStatusEnum = pgEnum('trip_stop_status', [
   'PENDING',
   'ARRIVED',
+  'WAITING_WINDOW',
   'UNLOADING',
   'DELIVERED',
   'DISCREPANCY_FLAGGED',
   'FAILED',
+]);
+
+export const deliveryOutcomeEnum = pgEnum('delivery_outcome', [
+  'FULL',
+  'PARTIAL',
 ]);
 
 export const discrepancyStatusEnum = pgEnum('discrepancy_status', [

@@ -5,6 +5,9 @@ import {
   IsArray,
   ValidateNested,
   IsObject,
+  IsIn,
+  IsISO8601,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -18,8 +21,22 @@ export class ClientMutationDto {
   entity!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsIn([
+    'confirm_readiness',
+    'depart_trip',
+    'arrive_stop',
+    'deliver_stop',
+    'fail_stop',
+    'complete_trip',
+  ])
   action!: string;
+
+  @IsISO8601()
+  occurredAt!: string;
+
+  @IsOptional()
+  @IsISO8601()
+  baseUpdatedAt?: string;
 
   @IsObject()
   @IsNotEmpty()

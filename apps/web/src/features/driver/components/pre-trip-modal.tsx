@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, CheckSquare, ShieldCheck, Thermometer, Fuel, Truck } from "lucide-react";
+import { X, CheckSquare, ShieldCheck, Thermometer, Fuel } from "lucide-react";
 import type { PreTripChecklist, DriverVehicleTelematics } from "../driver-types";
 import { Button } from "@/components/ui/button";
 
@@ -16,11 +16,11 @@ export function PreTripModal({
   onClose,
   onComplete,
 }: PreTripModalProps) {
-  const [tiresOk, setTiresOk] = useState(true);
-  const [mirrorsAndLightsOk, setMirrorsAndLightsOk] = useState(true);
-  const [lifoSealsVerified, setLifoSealsVerified] = useState(true);
-  const [reeferTempVerified, setReeferTempVerified] = useState(true);
-  const [fuelLevelConfirmed, setFuelLevelConfirmed] = useState(true);
+  const [tiresOk, setTiresOk] = useState(false);
+  const [mirrorsAndLightsOk, setMirrorsAndLightsOk] = useState(false);
+  const [lifoSealsVerified, setLifoSealsVerified] = useState(false);
+  const [reeferTempVerified, setReeferTempVerified] = useState(!vehicle.chilled);
+  const [fuelLevelConfirmed, setFuelLevelConfirmed] = useState(false);
 
   const allChecked =
     tiresOk &&

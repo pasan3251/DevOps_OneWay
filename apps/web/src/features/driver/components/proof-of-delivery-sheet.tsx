@@ -31,6 +31,7 @@ export function ProofOfDeliverySheet({
   const [selectedTags, setSelectedTags] = useState<string[]>([
     "Count verified with store manager",
   ]);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Setup HTML5 canvas for touch signature
   useEffect(() => {
@@ -46,7 +47,7 @@ export function ProofOfDeliverySheet({
     ctx.scale(2, 2);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#15576C";
+    ctx.strokeStyle = "#171717";
     ctx.lineWidth = 2.5;
   }, []);
 
@@ -149,7 +150,23 @@ export function ProofOfDeliverySheet({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recipientName.trim()) return;
+    setValidationError(null);
+    if (!recipientName.trim()) {
+      setValidationError("Enter the receiving representative’s name.");
+      return;
+    }
+    if (!hasSignature && !photoPreview) {
+      setValidationError("Capture a signature or photo as proof of handover.");
+      return;
+    }
+    if (outcome === "partial" && deliveredCartons >= stop.totalCartons) {
+      setValidationError("A partial delivery must record fewer cartons than the manifest total.");
+      return;
+    }
+    if (outcome === "partial" && !notes.trim()) {
+      setValidationError("Add a handover note describing the shortage or discrepancy.");
+      return;
+    }
 
     let signatureDataUrl: string | undefined;
     if (canvasRef.current && hasSignature) {
@@ -165,10 +182,8 @@ export function ProofOfDeliverySheet({
       signatureDataUrl,
       photoDataUrl: photoPreview || undefined,
       notes: [notes, ...selectedTags].filter(Boolean).join(" | "),
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      timestamp: new Date().toISOString(),
+      geoCoordinates: stop.coordinates,
     };
 
     onSubmit(pod);
@@ -202,7 +217,7 @@ export function ProofOfDeliverySheet({
             <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
               Handover Outcome
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -220,7 +235,10 @@ export function ProofOfDeliverySheet({
 
               <button
                 type="button"
-                onClick={() => setOutcome("partial")}
+                onClick={() => {
+                  setOutcome("partial");
+                  setDeliveredCartons(Math.max(1, stop.totalCartons - 1));
+                }}
                 className={`py-2 px-1 text-xs font-semibold rounded-lg border text-center transition-colors ${
                   outcome === "partial"
                     ? "bg-secondary border-border text-foreground ring-1 ring-border"
@@ -230,17 +248,6 @@ export function ProofOfDeliverySheet({
                 Partial Shortage
               </button>
 
-              <button
-                type="button"
-                onClick={() => setOutcome("damaged")}
-                className={`py-2 px-1 text-xs font-semibold rounded-lg border text-center transition-colors ${
-                  outcome === "damaged"
-                    ? "bg-secondary border-border text-foreground ring-1 ring-border"
-                    : "bg-card border-border text-foreground hover:bg-muted"
-                }`}
-              >
-                Damage Claim
-              </button>
             </div>
           </div>
 
@@ -340,7 +347,7 @@ export function ProofOfDeliverySheet({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-muted-foreground">
-                Recipient Signature *
+                Recipient Signature (signature or photo required)
               </label>
               {hasSignature && (
                 <button
@@ -377,7 +384,7 @@ export function ProofOfDeliverySheet({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-muted-foreground">
-                Photo Evidence (Optional / Discrepancy)
+                Photo Evidence (signature or photo required)
               </label>
               <button
                 type="button"
@@ -433,6 +440,24 @@ export function ProofOfDeliverySheet({
             </div>
           )}
 
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">
+              Driver handover note {outcome === "partial" ? "*" : "(Optional)"}
+            </label>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              required={outcome === "partial"}
+              rows={2}
+              placeholder="Record any shortage, damage, temperature concern, or receiving note."
+              className="w-full text-xs p-2.5 rounded-lg border border-border bg-card text-foreground focus:ring-2 focus:ring-primary outline-none resize-none"
+            />
+          </div>
+
+          {validationError && (
+            <p className="driver-form-error" role="alert">{validationError}</p>
+          )}
+
           {/* Action Buttons */}
           <div className="pt-2 flex gap-3">
             <Button
@@ -445,7 +470,7 @@ export function ProofOfDeliverySheet({
             </Button>
             <Button
               type="submit"
-              disabled={!recipientName.trim()}
+              disabled={!recipientName.trim() || (!hasSignature && !photoPreview)}
               className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2"
             >
               <Check size={16} />
