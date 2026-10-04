@@ -1,266 +1,195 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  Truck,
-  FileCheck,
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  FileCheck2,
+  MapPin,
   ShieldAlert,
   Snowflake,
   Sun,
-  MapPin,
-  Clock,
-  UserCheck,
-  CheckCircle2,
-  AlertTriangle,
-  FileText,
+  Truck,
+  UserRound,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { PodModal } from "./pod-modal";
 import { DiscrepancyModal } from "./discrepancy-modal";
+import { PodModal } from "./pod-modal";
 import type { StoreDeliveryCard } from "../store-manager-api";
+import { deliveryStatusMeta, formatDate, formatTime } from "../store-manager-format";
 
 interface DeliveriesViewProps {
   deliveries: StoreDeliveryCard[];
+  outletWindow: string;
   onRefresh: () => void;
 }
 
-export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
-  const [selectedPodDelivery, setSelectedPodDelivery] = useState<StoreDeliveryCard | null>(null);
-  const [selectedDiscrepancyDelivery, setSelectedDiscrepancyDelivery] = useState<StoreDeliveryCard | null>(null);
-  const [filterType, setFilterType] = useState<string>('ALL');
+type DeliveryFilter = "ALL" | "INCOMING" | "DELIVERED" | "EXCEPTION";
 
-  const filtered = deliveries.filter((d) => {
-    if (filterType === 'ALL') return true;
-    if (filterType === 'IN_TRANSIT') return d.status === 'IN_TRANSIT';
-    if (filterType === 'DELIVERED') return d.status === 'DELIVERED';
-    if (filterType === 'DISCREPANCY') return (d.discrepancies && d.discrepancies.length > 0);
-    return true;
-  });
+const deliveryFilters: Array<{ id: DeliveryFilter; label: string }> = [
+  { id: "ALL", label: "All movements" },
+  { id: "INCOMING", label: "Incoming" },
+  { id: "DELIVERED", label: "Delivered" },
+  { id: "EXCEPTION", label: "Exceptions" },
+];
+
+const progressSteps = ["SCHEDULED", "IN_TRANSIT", "ARRIVED", "DELIVERED"] as const;
+
+export function DeliveriesView({ deliveries, outletWindow, onRefresh }: DeliveriesViewProps) {
+  const [filter, setFilter] = useState<DeliveryFilter>("ALL");
+  const [podDelivery, setPodDelivery] = useState<StoreDeliveryCard | null>(null);
+  const [claimDelivery, setClaimDelivery] = useState<StoreDeliveryCard | null>(null);
+
+  const visibleDeliveries = useMemo(
+    () => deliveries.filter((delivery) => {
+      if (filter === "ALL") return true;
+      if (filter === "INCOMING") return ["SCHEDULED", "IN_TRANSIT", "ARRIVED"].includes(delivery.status);
+      if (filter === "DELIVERED") return delivery.status === "DELIVERED";
+      return delivery.status === "FAILED" || Boolean(delivery.discrepancies?.length);
+    }),
+    [deliveries, filter],
+  );
+
+  const incoming = deliveries.filter((delivery) => ["SCHEDULED", "IN_TRANSIT", "ARRIVED"].includes(delivery.status));
+  const changed = deliveries.filter((delivery) => delivery.etaNotice || delivery.manifestNotice);
+  const claims = deliveries.reduce((total, delivery) => total + (delivery.discrepancies?.length || 0), 0);
 
   return (
-    <div className="space-y-5">
-      {/* 1. Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+    <div className="store-page-stack">
+      <section className="store-task-header">
         <div>
-          <h1 className="text-xl font-bold text-slate-100">Inbound Deliveries &amp; Receiving</h1>
-          <p className="text-xs text-slate-400">
-            Real-time dock arrival schedule, driver carrier telemetry, and digital receiving sign-off.
-          </p>
+          <span className="store-eyebrow">Arrival to confirmed handover</span>
+          <h2>Receiving</h2>
+          <p>Use one timeline for ETA changes, arrival, POD review, and physical discrepancy reporting.</p>
         </div>
+        <div className="store-window-card"><Clock3 size={17} /><span><small>Receiving window</small><strong>{outletWindow}</strong></span></div>
+      </section>
 
-        <div className="flex items-center gap-1.5 text-xs">
-          {[
-            { id: 'ALL', label: 'All Shipments' },
-            { id: 'IN_TRANSIT', label: 'En Route' },
-            { id: 'DELIVERED', label: 'Delivered at Dock' },
-            { id: 'DISCREPANCY', label: 'With Claims' },
-          ].map((pill) => (
-            <button
-              key={pill.id}
-              onClick={() => setFilterType(pill.id)}
-              className={`px-3 py-1 rounded-full whitespace-nowrap font-medium transition-colors ${
-                filterType === pill.id
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-              }`}
-            >
-              {pill.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <section className="store-summary-grid" aria-label="Receiving summary">
+        <article className="store-stat-card"><span className="store-stat-icon"><Truck size={18} /></span><span><small>Incoming</small><strong>{incoming.length}</strong></span></article>
+        <article className="store-stat-card"><span className="store-stat-icon"><Clock3 size={18} /></span><span><small>Schedule changes</small><strong>{changed.length}</strong></span></article>
+        <article className="store-stat-card"><span className="store-stat-icon"><CheckCircle2 size={18} /></span><span><small>Received</small><strong>{deliveries.filter((delivery) => delivery.status === "DELIVERED").length}</strong></span></article>
+        <article className="store-stat-card"><span className="store-stat-icon"><ShieldAlert size={18} /></span><span><small>Claims logged</small><strong>{claims}</strong></span></article>
+      </section>
 
-      {/* 2. Shipments Cards */}
-      {filtered.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900/30 rounded-xl border border-slate-800 text-slate-500 text-xs">
-          No inbound shipments matching the selected filter.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map((delivery) => {
-            const isChilled = delivery.tempRequirement === 'chilled';
-            const isDelivered = delivery.status === 'DELIVERED';
-            const isInTransit = delivery.status === 'IN_TRANSIT';
-            const hasClaims = delivery.discrepancies && delivery.discrepancies.length > 0;
+      {changed.length > 0 && (
+        <section className="store-panel store-change-panel" aria-labelledby="receiving-changes-title">
+          <header className="store-panel-heading">
+            <div><span className="store-eyebrow">Since plan publication</span><h2 id="receiving-changes-title">Receiving changes</h2></div>
+          </header>
+          <div className="store-change-list">
+            {changed.map((delivery) => (
+              <article key={`${delivery.tripStopId}-notice`}>
+                <AlertTriangle size={17} />
+                <span><strong>{delivery.orderNumber} · {delivery.tempRequirement}</strong><small>{delivery.etaNotice || delivery.manifestNotice}</small>{delivery.etaNotice && delivery.manifestNotice && <small>{delivery.manifestNotice}</small>}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
-            return (
-              <Card
-                key={delivery.tripStopId}
-                className={`border transition-all ${
-                  hasClaims
-                    ? 'bg-amber-950/10 border-amber-500/30'
-                    : isDelivered
-                    ? 'bg-slate-900/60 border-slate-800'
-                    : 'bg-sky-950/20 border-sky-500/40 shadow-md shadow-sky-950/30'
-                }`}
-              >
-                <CardContent className="p-5 space-y-4">
-                  {/* Top Row: Cargo Type & Status */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`p-2.5 rounded-xl ${
-                          isChilled
-                            ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        }`}
-                      >
-                        {isChilled ? <Snowflake className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-base text-slate-100">
-                            {isChilled ? 'Chilled Reefer Consignment' : 'Ambient Dry Consignment'}
-                          </h3>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs ${
-                              isDelivered
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                : isInTransit
-                                ? 'bg-sky-500/10 text-sky-400 border-sky-500/30 animate-pulse'
-                                : 'bg-slate-800 text-slate-400'
-                            }`}
-                          >
-                            {delivery.status}
-                          </Badge>
-                        </div>
-                        <span className="text-xs text-slate-400 font-mono">
-                          Order #{delivery.orderNumber} • Stop Sequence #{delivery.stopSequence}
-                        </span>
-                      </div>
+      <section className="store-panel store-receiving-panel" aria-labelledby="delivery-timeline-title">
+        <header className="store-panel-heading">
+          <div>
+            <span className="store-eyebrow">Delivery timeline</span>
+            <h2 id="delivery-timeline-title">{visibleDeliveries.length} movements</h2>
+            <p>Fresh ambient and chilled orders remain separate movements when different vehicles are required.</p>
+          </div>
+          <div className="store-filter-pills" aria-label="Filter delivery movements">
+            {deliveryFilters.map((item) => (
+              <button key={item.id} type="button" data-selected={filter === item.id} onClick={() => setFilter(item.id)}>{item.label}</button>
+            ))}
+          </div>
+        </header>
+
+        {visibleDeliveries.length === 0 ? (
+          <div className="store-empty-state"><Truck size={22} /><strong>No matching movements</strong><span>Published routes will appear here for receiving preparation.</span></div>
+        ) : (
+          <div className="store-delivery-list">
+            {visibleDeliveries.map((delivery) => {
+              const status = deliveryStatusMeta[delivery.status];
+              const chilled = delivery.tempRequirement === "chilled";
+              const activeStep = progressSteps.indexOf(delivery.status === "FAILED" ? "SCHEDULED" : delivery.status);
+              const hasClaims = Boolean(delivery.discrepancies?.length);
+              return (
+                <article className="store-delivery-card" key={delivery.tripStopId} data-exception={delivery.status === "FAILED" || hasClaims}>
+                  <header>
+                    <div className="store-delivery-identity">
+                      <span className="store-regime-icon">{chilled ? <Snowflake size={19} /> : <Sun size={19} />}</span>
+                      <div><span className="store-eyebrow">{formatDate(delivery.operatingDate)} · Stop {delivery.stopSequence}</span><h3>{chilled ? "Chilled" : "Ambient"} delivery</h3><p>{delivery.orderNumber} · {delivery.tripNumber}</p></div>
                     </div>
+                    <div className="store-delivery-eta"><small>Planned ETA</small><strong>{formatTime(delivery.plannedArrivalTime)}</strong><span className="store-status" data-tone={status.tone}>{status.label}</span></div>
+                  </header>
 
-                    <div className="flex items-center gap-4 text-xs">
-                      <div>
-                        <span className="text-slate-500 block text-[11px]">Trip Reference</span>
-                        <span className="font-mono font-medium text-slate-300">{delivery.tripNumber}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[11px]">Planned Window</span>
-                        <span className="font-bold text-sky-400">{delivery.plannedArrivalTime || '10:00 AM'}</span>
-                      </div>
-                    </div>
+                  <ol className="store-delivery-progress" aria-label={`${delivery.orderNumber} delivery progress`}>
+                    {progressSteps.map((step, index) => (
+                      <li key={step} data-state={delivery.status === "FAILED" ? "failed" : index < activeStep ? "complete" : index === activeStep ? "current" : "upcoming"}>
+                        <span>{index < activeStep ? <CheckCircle2 size={15} /> : index + 1}</span>
+                        <small>{step === "SCHEDULED" ? "Scheduled" : step === "IN_TRANSIT" ? "In transit" : step === "ARRIVED" ? "At store" : "Handover"}</small>
+                      </li>
+                    ))}
+                  </ol>
+
+                  <div className="store-delivery-facts">
+                    <div><Truck size={16} /><span><small>Vehicle</small><strong>{delivery.vehiclePlate}</strong><em>{delivery.vehicleType.replaceAll("_", " ")}</em></span></div>
+                    <div><UserRound size={16} /><span><small>Driver</small><strong>{delivery.driverName}</strong><em>{delivery.driverPhone}</em></span></div>
+                    <div><MapPin size={16} /><span><small>Expected load</small><strong>{delivery.totalItemsCount} units</strong><em>{delivery.totalWeightKg} kg</em></span></div>
                   </div>
 
-                  {/* Middle Grid: Logistics & Carrier Telematics */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-950/60 rounded-lg border border-slate-800/80 text-xs">
-                    <div>
-                      <span className="text-slate-500 block text-[11px] mb-0.5">Assigned Vehicle</span>
-                      <span className="font-bold text-slate-200">{delivery.vehiclePlate}</span>
-                      <span className="text-[11px] text-slate-400 block mt-0.5">{delivery.vehicleType}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-500 block text-[11px] mb-0.5">Fleet Driver</span>
-                      <span className="font-bold text-slate-200">{delivery.driverName}</span>
-                      <span className="text-[11px] text-sky-400 block mt-0.5 font-mono">{delivery.driverPhone}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-500 block text-[11px] mb-0.5">Payload Dimensions</span>
-                      <span className="font-bold text-slate-200">{delivery.totalItemsCount} Packages</span>
-                      <span className="text-[11px] text-slate-400 block mt-0.5">{delivery.totalWeightKg} kg Total</span>
-                    </div>
-                  </div>
-
-                  {/* Discrepancy Claims Alert Section */}
-                  {hasClaims && (
-                    <div className="space-y-2 p-3 bg-amber-950/20 border border-amber-500/30 rounded-lg">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
-                        <ShieldAlert className="h-4 w-4" />
-                        Logged Receiving Discrepancy Claims
-                      </div>
-                      <div className="space-y-1.5">
-                        {delivery.discrepancies?.map((claim) => (
-                          <div
-                            key={claim.id}
-                            className="flex items-center justify-between text-xs bg-slate-950/60 p-2 rounded border border-amber-900/30 text-slate-300"
-                          >
-                            <div className="space-y-0.5">
-                              <span className="font-mono text-amber-300 font-semibold">{claim.claimNumber}</span>
-                              <p className="text-[11px] text-slate-400">
-                                {claim.discrepancyType.replace(/_/g, ' ')} • {claim.shortfallQty} units short
-                              </p>
-                              {claim.notes && <p className="text-[11px] text-slate-300 italic">&ldquo;{claim.notes}&rdquo;</p>}
-                            </div>
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
-                              {claim.status}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
+                  {(delivery.etaNotice || delivery.manifestNotice) && (
+                    <div className="store-inline-notices">
+                      {delivery.etaNotice && <p><Clock3 size={15} /><span><strong>ETA update</strong>{delivery.etaNotice}</span></p>}
+                      {delivery.manifestNotice && <p><AlertTriangle size={15} /><span><strong>Manifest update</strong>{delivery.manifestNotice}</span></p>}
                     </div>
                   )}
 
-                  {/* Actions Bar */}
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="text-xs text-slate-400">
-                      {isDelivered && delivery.proofOfDelivery ? (
-                        <span className="flex items-center gap-1.5 text-emerald-400">
-                          <CheckCircle2 className="h-4 w-4" />
-                          POD Handover verified by {delivery.proofOfDelivery.storeRepName}
-                        </span>
-                      ) : isInTransit ? (
-                        <span className="flex items-center gap-1.5 text-sky-400 animate-pulse">
-                          <Clock className="h-4 w-4" />
-                          Truck currently en route to store dock
-                        </span>
-                      ) : (
-                        <span>Awaiting dock arrival</span>
-                      )}
+                  {hasClaims && (
+                    <div className="store-claims-list">
+                      {delivery.discrepancies?.map((claim) => (
+                        <div key={claim.id}>
+                          <ShieldAlert size={16} />
+                          <span><strong>{claim.claimNumber}</strong><small>{claim.discrepancyType.replaceAll("_", " ").toLowerCase()} · {claim.shortfallQty} affected</small></span>
+                          <span className="store-status" data-tone="attention">{claim.status.replaceAll("_", " ").toLowerCase()}</span>
+                        </div>
+                      ))}
                     </div>
+                  )}
 
-                    <div className="flex items-center gap-2">
-                      {delivery.proofOfDelivery && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedPodDelivery(delivery)}
-                          className="h-8 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
-                        >
-                          <FileCheck className="h-3.5 w-3.5" />
-                          Inspect POD Receipt
-                        </Button>
-                      )}
-
-                      {isDelivered && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedDiscrepancyDelivery(delivery)}
-                          className="h-8 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10 gap-1.5"
-                        >
-                          <ShieldAlert className="h-3.5 w-3.5" />
-                          Report Discrepancy
-                        </Button>
-                      )}
+                  <footer>
+                    <p>
+                      {delivery.status === "DELIVERED"
+                        ? delivery.proofOfDelivery
+                          ? `Handover recorded by ${delivery.proofOfDelivery.storeRepName}`
+                          : "Delivery completed; proof is awaiting synchronization."
+                        : delivery.status === "FAILED"
+                          ? "Dispatch recorded a delivery exception."
+                          : "Prepare the receiving point and verify physical quantities at handover."}
+                    </p>
+                    <div>
+                      {delivery.proofOfDelivery && <button className="store-secondary-button" type="button" onClick={() => setPodDelivery(delivery)}><FileCheck2 size={15} /> View POD</button>}
+                      {delivery.status === "DELIVERED" && <button className="store-primary-button" type="button" onClick={() => setClaimDelivery(delivery)}><ShieldAlert size={15} /> Report discrepancy</button>}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-      {/* Modals */}
       <PodModal
-        isOpen={!!selectedPodDelivery}
-        onClose={() => setSelectedPodDelivery(null)}
-        orderNumber={selectedPodDelivery?.orderNumber || ''}
-        vehiclePlate={selectedPodDelivery?.vehiclePlate || ''}
-        pod={selectedPodDelivery?.proofOfDelivery || null}
+        isOpen={Boolean(podDelivery)}
+        onClose={() => setPodDelivery(null)}
+        orderNumber={podDelivery?.orderNumber || ""}
+        vehiclePlate={podDelivery?.vehiclePlate || ""}
+        pod={podDelivery?.proofOfDelivery || null}
       />
-
       <DiscrepancyModal
-        isOpen={!!selectedDiscrepancyDelivery}
-        onClose={() => setSelectedDiscrepancyDelivery(null)}
-        delivery={selectedDiscrepancyDelivery}
+        isOpen={Boolean(claimDelivery)}
+        onClose={() => setClaimDelivery(null)}
+        delivery={claimDelivery}
         onClaimSubmitted={() => {
-          setSelectedDiscrepancyDelivery(null);
+          setClaimDelivery(null);
           onRefresh();
         }}
       />

@@ -8,6 +8,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
@@ -36,7 +37,10 @@ export class OrdersController {
     @CurrentUser() user: RequestUser,
   ) {
     // If store manager, automatically bind to user's assigned outlet
-    if (user.role === 'store_manager' && user.outletId) {
+    if (user.role === 'store_manager') {
+      if (!user.outletId) {
+        throw new ForbiddenException('Store Manager must be assigned to an active outlet');
+      }
       dto.outletId = user.outletId;
     }
     return this.ordersService.createOrder(dto, user.id);
@@ -49,7 +53,10 @@ export class OrdersController {
     @Query() filter: OrderFilterDto,
     @CurrentUser() user: RequestUser,
   ) {
-    if (user.role === 'store_manager' && user.outletId) {
+    if (user.role === 'store_manager') {
+      if (!user.outletId) {
+        throw new ForbiddenException('Store Manager must be assigned to an active outlet');
+      }
       filter.outletId = user.outletId;
     }
     return this.ordersService.listOrders(filter);
@@ -58,8 +65,11 @@ export class OrdersController {
   @Get(':id')
   @Roles('store_manager', 'dispatcher', 'admin', 'loader', 'driver')
   @ApiOperation({ summary: 'Get complete order details by ID' })
-  async getOrderById(@Param('id') id: string) {
-    return this.ordersService.getOrderById(id);
+  async getOrderById(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.ordersService.getOrderById(id, user);
   }
 
   @Post(':id/cancel')
@@ -68,8 +78,8 @@ export class OrdersController {
   @ApiOperation({ summary: 'Cancel unassigned replenishment order' })
   async cancelOrder(
     @Param('id') id: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
   ) {
-    return this.ordersService.cancelOrder(id, userId);
+    return this.ordersService.cancelOrder(id, user);
   }
 }

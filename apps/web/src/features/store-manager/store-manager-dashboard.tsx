@@ -1,298 +1,340 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Store,
-  LayoutDashboard,
-  PlusCircle,
+  AlertTriangle,
+  CheckCircle2,
+  CircleHelp,
   ClipboardList,
-  Truck,
-  RotateCw,
+  Clock3,
+  LayoutDashboard,
+  LoaderCircle,
   LogOut,
-  ChevronDown,
-  Building2,
-  Clock,
+  PackageCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
   ShieldCheck,
+  Truck,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { WaypointLogo } from "@/components/waypoint-logo";
-import { authService } from "@/features/auth/auth-service";
 import {
-  storeApi,
-  DEMO_OUTLETS,
-  type StoreOverviewData,
-  type StoreOrder,
-} from "./store-manager-api";
-
-import { OverviewView } from "./components/overview-view";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { WaypointLogo } from "@/components/waypoint-logo";
+import { authService, type Session } from "@/features/auth/auth-service";
+import { DeliveriesView } from "./components/deliveries-view";
 import { NewOrderView } from "./components/new-order-view";
 import { OrdersView } from "./components/orders-view";
-import { DeliveriesView } from "./components/deliveries-view";
+import { OverviewView } from "./components/overview-view";
+import {
+  storeApi,
+  type StoreOrder,
+  type StoreOverviewData,
+} from "./store-manager-api";
+
+import "@/features/dispatcher/dispatcher.css";
+import "@/features/dispatcher/workspace.css";
+import "@/features/dispatcher/monochrome.css";
+import "./store-manager.css";
+
+type StoreView = "today" | "orders" | "new-order" | "receiving";
+
+const storeNavigation = [
+  { id: "today", label: "Today", Icon: LayoutDashboard },
+  { id: "orders", label: "Orders", Icon: ClipboardList },
+  { id: "receiving", label: "Receiving", Icon: Truck },
+] as const;
+
+const NAV_COLLAPSED_KEY = "waypoint.store.navigation-collapsed.v1";
 
 export function StoreManagerDashboard() {
   const router = useRouter();
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'new-order' | 'orders' | 'deliveries'>('overview');
+  const contentRef = useRef<HTMLElement>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [view, setView] = useState<StoreView>("today");
   const [data, setData] = useState<StoreOverviewData | null>(null);
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<StoreOrder | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [storeDropdownOpen, setStoreDropdownOpen] = useState<boolean>(false);
+  const [navCollapsed, setNavCollapsed] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [message, setMessage] = useState("");
+  const [failure, setFailure] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
 
-  // Load store overview data
-  const loadData = useCallback(async (showRefreshIndicator = false) => {
-    if (showRefreshIndicator) setIsRefreshing(true);
+  const loadData = useCallback(async (showRefresh = false) => {
+    if (showRefresh) setRefreshing(true);
     try {
-      const overview = await storeApi.getOverview();
-      const orderList = await storeApi.getOrders();
+      const [overview, orderList] = await Promise.all([
+        storeApi.getOverview(),
+        storeApi.getOrders(),
+      ]);
       setData(overview);
       setOrders(orderList);
-    } catch (err) {
-      console.error('Failed to load store manager data', err);
+      setFailure("");
+      if (showRefresh) setMessage("Store status refreshed.");
+    } catch {
+      setFailure("Store data could not be loaded. Try refreshing the workspace.");
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    const active = authService.getSession();
+    if (!active) {
+      router.replace("/login");
+      return;
+    }
+    if (active.role !== "store-manager") {
+      router.replace(`/workspace/${active.role}`);
+      return;
+    }
 
-  // Handle switching active store outlet (for testing & demo purposes)
-  const handleSelectOutlet = (outletId: string) => {
-    storeApi.setActiveOutlet(outletId);
-    setStoreDropdownOpen(false);
-    loadData(true);
-  };
+    const timer = window.setTimeout(() => {
+      setSession(active);
+      const destination = window.location.hash.slice(1);
+      if (["today", "orders", "new-order", "receiving"].includes(destination)) {
+        setView(destination as StoreView);
+      }
+      try {
+        const stored = window.localStorage.getItem(NAV_COLLAPSED_KEY);
+        if (stored !== null) setNavCollapsed(stored === "true");
+      } catch {
+        // Keep the default navigation state when preferences are unavailable.
+      }
+      void loadData();
+    }, 0);
 
-  const handleLogout = () => {
-    authService.signOut();
-    router.push('/');
-  };
+    return () => window.clearTimeout(timer);
+  }, [loadData, router]);
 
-  if (isLoading || !data) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 gap-3">
-        <div className="h-8 w-8 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
-        <span className="text-xs">Initializing Store Operational Context...</span>
-      </div>
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0 });
+    window.scrollTo({ top: 0, left: 0 });
+  }, [view]);
+
+  function navigate(next: StoreView) {
+    setSelectedOrder(null);
+    setView(next);
+    setMessage("");
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${next === "today" ? "" : `#${next}`}`,
     );
   }
 
-  const activeOutlet = data.outlet;
+  function toggleNavigation() {
+    const next = !navCollapsed;
+    setNavCollapsed(next);
+    try {
+      window.localStorage.setItem(NAV_COLLAPSED_KEY, String(next));
+    } catch {
+      setFailure("Navigation preference could not be saved.");
+    }
+  }
+
+  function signOut() {
+    authService.signOut();
+    router.replace("/login");
+  }
+
+  if (!session || loading || !data) {
+    return (
+      <main className="workspace-loading">
+        <LoaderCircle aria-hidden="true" className="loading-spinner" />
+        <p role="status">Opening store operations workspace…</p>
+      </main>
+    );
+  }
+
+  const outlet = data.outlet;
+  const activeOrders = orders.filter(
+    (order) => !["DELIVERED", "CANCELLED"].includes(order.status),
+  ).length;
+  const inbound = data.inboundDeliveries.filter(
+    (delivery) => !["DELIVERED", "FAILED"].includes(delivery.status),
+  ).length;
+  const heading =
+    view === "today"
+      ? ["Today", "Orders, delivery changes and receiving work for your outlet."]
+      : view === "orders"
+        ? ["Orders", "Place replenishment orders and follow each Dispatch decision."]
+        : view === "new-order"
+          ? ["Create order", "Build one whole ambient or chilled order for the selected delivery day."]
+          : ["Receiving", "Track incoming vehicles, review proof and report physical differences."];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* 1. Global Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Logo & Role Identity */}
-          <div className="flex items-center gap-3">
-            <WaypointLogo light />
-            <div className="h-4 w-px bg-slate-700 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[11px] font-semibold uppercase tracking-wider"
-              >
-                Store Manager
-              </Badge>
-              <span className="text-xs text-slate-400 hidden md:inline">
-                • Supply Chain Demand Portal
-              </span>
-            </div>
-          </div>
-
-          {/* Store Switcher & User Actions */}
-          <div className="flex items-center gap-3">
-            {/* Store Outlet Selector Dropdown */}
-            <div className="relative">
+    <div className={`dispatch-app store-app${navCollapsed ? " navigation-collapsed" : ""}`}>
+      <aside className="dispatch-sidebar">
+        <WaypointLogo light />
+        <nav aria-label="Store manager navigation">
+          {storeNavigation.map(({ id, label, Icon }) => {
+            const active = id === "orders" ? view === "orders" || view === "new-order" : view === id;
+            return (
               <button
-                type="button"
-                onClick={() => setStoreDropdownOpen(!storeDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950/80 border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 transition-colors"
+                key={id}
+                aria-label={label}
+                title={navCollapsed ? label : undefined}
+                aria-current={active ? "page" : undefined}
+                onClick={() => navigate(id)}
               >
-                <Store className="h-3.5 w-3.5 text-sky-400" />
-                <span className="max-w-[140px] sm:max-w-[200px] truncate">{activeOutlet.name}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                <Icon size={19} aria-hidden="true" />
+                <span className="dispatch-nav-label">{label}</span>
+                {id === "orders" && activeOrders > 0 && <span className="nav-count">{activeOrders}</span>}
+                {id === "receiving" && inbound > 0 && <span className="nav-count">{inbound}</span>}
               </button>
+            );
+          })}
+        </nav>
 
-              {storeDropdownOpen && (
-                <div className="absolute right-0 mt-1.5 w-64 bg-slate-900 border border-slate-800 rounded-lg shadow-2xl py-1 z-50">
-                  <div className="px-3 py-1.5 text-[10px] uppercase font-semibold text-slate-500 border-b border-slate-800">
-                    Switch Assigned Outlet (Demo Scope)
-                  </div>
-                  {DEMO_OUTLETS.map((outlet) => (
-                    <button
-                      key={outlet.id}
-                      type="button"
-                      onClick={() => handleSelectOutlet(outlet.id)}
-                      className={`w-full px-3 py-2 text-left text-xs flex flex-col transition-colors ${
-                        outlet.id === activeOutlet.id
-                          ? 'bg-sky-500/10 text-sky-400'
-                          : 'text-slate-300 hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold">{outlet.name}</span>
-                        <span className="text-[10px] font-mono text-slate-500">{outlet.code}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500">{outlet.brand} Retail • {outlet.district}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+        <div className="dispatch-sidebar-note">
+          <ShieldCheck size={20} aria-hidden="true" />
+          <p>Order, receive and report.</p>
+        </div>
 
-            {/* Refresh Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => loadData(true)}
-              disabled={isRefreshing}
-              className="border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 h-8 w-8 p-0"
-              title="Refresh Store Data"
-            >
-              <RotateCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-sky-400' : ''}`} />
-            </Button>
-
-            {/* Logout */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="text-slate-400 hover:text-slate-200 hover:bg-slate-800 text-xs h-8 px-2.5 gap-1.5"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </Button>
+        <div className="dispatch-user">
+          <span className="user-avatar">SM</span>
+          <div>
+            <strong>{session.name}</strong>
+            <span>Store manager · Demo</span>
           </div>
+          <button aria-label="Sign out" onClick={signOut}>
+            <LogOut size={18} aria-hidden="true" />
+          </button>
         </div>
+      </aside>
 
-        {/* 2. Secondary View Navigation Tabs */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-800/60">
-          <nav className="flex space-x-1 sm:space-x-4 py-2 overflow-x-auto">
+      <div className="dispatch-main">
+        <header className="dispatch-topbar">
+          <div>
             <button
-              onClick={() => setActiveTab('overview')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                activeTab === 'overview'
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-              }`}
+              className="dispatch-icon-button navigation-toggle"
+              aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+              aria-expanded={!navCollapsed}
+              onClick={toggleNavigation}
             >
-              <LayoutDashboard className="h-3.5 w-3.5" />
-              Store Overview
+              {navCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
             </button>
-
+            <span>Store operations</span>
+          </div>
+          <div>
+            <span className="demo-label">Demo data</span>
+            <span className="store-clock" aria-label="Current time in Asia Colombo">
+              <Clock3 size={15} aria-hidden="true" />
+              {data.cutoff.currentColomboTime}
+              <small>Colombo · Cutoff 16:00</small>
+            </span>
             <button
-              onClick={() => setActiveTab('new-order')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                activeTab === 'new-order'
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-              }`}
+              className="dispatch-icon-button"
+              aria-label="Refresh store data"
+              disabled={refreshing}
+              onClick={() => void loadData(true)}
             >
-              <PlusCircle className="h-3.5 w-3.5" />
-              New Order
+              <RefreshCw size={18} className={refreshing ? "is-spinning" : undefined} />
             </button>
-
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                activeTab === 'orders'
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-              }`}
-            >
-              <ClipboardList className="h-3.5 w-3.5" />
-              Orders
-              {data.activeCounts.total > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">
-                  {data.activeCounts.total}
-                </span>
-              )}
+            <button className="dispatch-icon-button" aria-label="Store workspace guide" onClick={() => setHelpOpen(true)}>
+              <CircleHelp size={20} aria-hidden="true" />
             </button>
-
-            <button
-              onClick={() => setActiveTab('deliveries')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                activeTab === 'deliveries'
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-              }`}
-            >
-              <Truck className="h-3.5 w-3.5" />
-              Deliveries &amp; Receiving
-              {data.inboundDeliveries.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-sky-950 text-sky-400 border border-sky-800">
-                  {data.inboundDeliveries.length}
-                </span>
-              )}
+            <button className="dispatch-icon-button dispatch-mobile-signout" aria-label="Sign out" onClick={signOut}>
+              <LogOut size={18} aria-hidden="true" />
             </button>
-          </nav>
-        </div>
-      </header>
+          </div>
+        </header>
 
-      {/* 3. Main Operational Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'overview' && (
-          <OverviewView
-            data={data}
-            onNavigateToNewOrder={() => setActiveTab('new-order')}
-            onNavigateToOrders={() => setActiveTab('orders')}
-            onSelectOrder={(order) => {
-              setSelectedOrder(order);
-              setActiveTab('orders');
-            }}
-            onRefresh={() => loadData(true)}
-          />
-        )}
+        <main ref={contentRef} className="dispatch-content dispatch-content-scrollable store-content">
+          <div className="dispatch-heading store-heading">
+            <div>
+              <h1>{heading[0]}</h1>
+              <p>{heading[1]}</p>
+            </div>
+            <div className="store-outlet-context" aria-label="Assigned outlet">
+              <span>Assigned outlet</span>
+              <strong>{outlet.name}</strong>
+              <small>{outlet.code} · {outlet.brand} · {outlet.district}</small>
+            </div>
+          </div>
 
-        {activeTab === 'new-order' && (
-          <NewOrderView
-            outlet={data.outlet}
-            cutoff={data.cutoff}
-            onOrderCreated={() => {
-              loadData(true);
-              setActiveTab('orders');
-            }}
-            onCancel={() => setActiveTab('overview')}
-          />
-        )}
+          {message && (
+            <div className="store-feedback" role="status">
+              <CheckCircle2 size={16} aria-hidden="true" />
+              <span>{message}</span>
+              <button type="button" onClick={() => setMessage("")}>Dismiss</button>
+            </div>
+          )}
+          {failure && (
+            <div className="store-feedback is-error" role="alert">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <span>{failure}</span>
+              <button type="button" onClick={() => setFailure("")}>Dismiss</button>
+            </div>
+          )}
 
-        {activeTab === 'orders' && (
-          <OrdersView
-            orders={orders}
-            selectedOrder={selectedOrder}
-            onSelectOrder={setSelectedOrder}
-            onRefresh={() => loadData(true)}
-            onNavigateToNewOrder={() => setActiveTab('new-order')}
-          />
-        )}
+          {view === "today" && (
+            <OverviewView
+              data={data}
+              onNavigateToNewOrder={() => navigate("new-order")}
+              onNavigateToOrders={() => navigate("orders")}
+              onNavigateToReceiving={() => navigate("receiving")}
+            />
+          )}
 
-        {activeTab === 'deliveries' && (
-          <DeliveriesView
-            deliveries={data.inboundDeliveries}
-            onRefresh={() => loadData(true)}
-          />
-        )}
-      </main>
+          {view === "orders" && (
+            <OrdersView
+              orders={orders}
+              cutoff={data.cutoff}
+              selectedOrder={selectedOrder}
+              onSelectOrder={setSelectedOrder}
+              onRefresh={() => void loadData(true)}
+              onNavigateToNewOrder={() => navigate("new-order")}
+            />
+          )}
 
-      {/* 4. Footer */}
-      <footer className="border-t border-slate-800/80 bg-slate-950 text-slate-500 text-xs py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>
-            Waypoint Logistics Management System • Store Manager Portal (SM-1, SM-3, ALT-1)
-          </span>
-          <span className="font-mono text-[11px] text-slate-600">
-            Fulfillment Depot: Peliyagoda Central Hub (District Delivery Protocol)
-          </span>
-        </div>
-      </footer>
+          {view === "new-order" && (
+            <NewOrderView
+              outlet={outlet}
+              cutoff={data.cutoff}
+              existingOrders={orders}
+              onOrderCreated={() => {
+                void loadData(true);
+                navigate("orders");
+                setMessage("Order submitted and routed to the correct planning cycle.");
+              }}
+              onCancel={() => navigate("orders")}
+            />
+          )}
+
+          {view === "receiving" && (
+            <DeliveriesView
+              deliveries={data.inboundDeliveries}
+              outletWindow={outlet.deliveryWindow}
+              onRefresh={() => void loadData(true)}
+            />
+          )}
+        </main>
+      </div>
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-[480px] store-dialog">
+          <DialogHeader>
+            <DialogTitle>Store workflow guide</DialogTitle>
+            <DialogDescription>One controlled path from demand to receipt.</DialogDescription>
+          </DialogHeader>
+          <ol className="store-guide-list">
+            <li><PackageCheck size={18} /><span><strong>Place the order.</strong> Submit one whole ambient or chilled order. Fresh outlets may submit one of each for the same day.</span></li>
+            <li><ClipboardList size={18} /><span><strong>Wait for Dispatch.</strong> The order becomes planned with an ETA, or deferred with a formal reason and next-run priority.</span></li>
+            <li><Truck size={18} /><span><strong>Prepare to receive.</strong> Revised ETAs and partial-manifest notices appear in Receiving.</span></li>
+            <li><CheckCircle2 size={18} /><span><strong>Check the handover.</strong> Review the driver’s POD and report damage, shortages or a temperature rejection against that delivery.</span></li>
+          </ol>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

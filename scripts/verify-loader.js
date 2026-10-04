@@ -1,33 +1,40 @@
-﻿async (page) => {
-  await page.route("**://**tile.openstreetmap.org/**", route => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64") }));
-  const base = "http://127.0.0.1:3000";
-  const assert = (value, message) => { if (!value) throw new Error(message); };
-  const errors = []; page.on("pageerror", error => errors.push(error.message));
+async (page) => {
+  const base = "http://localhost:3000";
+  const assert = (value, message) => {
+    if (!value) throw new Error(message);
+  };
+  const errors = [];
   const results = [];
+  page.on("pageerror", (error) => errors.push(error.message));
 
-  // SETUP: fresh loader session
+  const storageKeys = [
+    "waypoint.demo.dispatch.v1",
+    "waypoint.demo.workspace.v1",
+    "waypoint.demo.session.v1",
+    "waypoint.demo.loader.discrepancies.v1",
+    "waypoint.demo.loader.clearances.v1",
+    "waypoint.demo.loader.verifications.v1",
+  ];
+
   await page.goto(`${base}/login`);
-  await page.evaluate(() => {
-    localStorage.removeItem("waypoint.demo.dispatch.v1");
-    localStorage.removeItem("waypoint.demo.workspace.v1");
-    localStorage.removeItem("waypoint.demo.session.v1");
-    localStorage.removeItem("waypoint.demo.loader.discrepancies.v1");
-    localStorage.removeItem("waypoint.demo.loader.clearances.v1");
+  await page.evaluate((keys) => {
+    keys.forEach((key) => localStorage.removeItem(key));
     sessionStorage.removeItem("waypoint.demo.session.v1");
-  });
+  }, storageKeys);
   await page.reload();
+  await page.waitForFunction(() => {
+    const signIn = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Sign in");
+    return Boolean(signIn && Object.keys(signIn).some((key) => key.startsWith("__reactProps$")));
+  });
 
-  // Sign in as Loader
-  await page.getByRole("button", { name: /Warehouse Loader/ }).click();
+  await page.getByRole("textbox", { name: "Email or employee ID" }).fill("LOAD001");
+  await page.getByRole("textbox", { name: "Password" }).fill("waypoint-demo");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("heading", { name: "Warehouse staging overview", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Staging queue", exact: true }).waitFor();
 
-  // 1. RESPONSIVE LAYOUT
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.evaluate(() => document.fonts.ready);
-  for (const width of [1440, 1120, 1024, 768, 390, 320]) {
-    const height = width > 1000 ? 1000 : 844;
-    await page.setViewportSize({ width, height });
+  // Responsive shell and touch controls.
+  for (const width of [1440, 1120, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: width > 1000 ? 950 : 844 });
     assert(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       `Horizontal overflow at ${width}px`
@@ -35,161 +42,105 @@
     if (width <= 768) {
       const sizes = await page
         .locator(".dispatch-app input:not([type=checkbox]), .dispatch-app select")
-        .evaluateAll(fields => fields.map(f => parseFloat(getComputedStyle(f).fontSize)));
-      assert(sizes.every(s => s >= 16), `Small-viewport inputs below 16px at ${width}px: ${sizes}`);
+        .evaluateAll((fields) => fields.map((field) => parseFloat(getComputedStyle(field).fontSize)));
+      assert(sizes.every((size) => size >= 16), `Small inputs at ${width}px: ${sizes}`);
     }
-    await page.screenshot({ path: `.impeccable/review/loader-overview-${width}.png`, fullPage: true });
   }
-  results.push("All breakpoints (1440/1120/1024/768/390/320px) render without horizontal overflow");
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  results.push("Responsive loader shell has no page-level horizontal overflow");
+  await page.setViewportSize({ width: 1440, height: 950 });
 
-  // 2. STAGING OVERVIEW: metric cards and vehicle queue
-  assert(await page.locator(".loader-stat-card").count() >= 4, "Summary strip missing metric cards");
-  assert(await page.locator(".loader-vehicle-card").count() >= 1, "Staging queue is empty");
-  const firstCardText = await page.locator(".loader-vehicle-card").first().innerText();
-  assert(firstCardText.includes("TRIP-01"), `First vehicle card does not show TRIP-01: "${firstCardText}"`);
-  results.push("Staging overview metric cards and vehicle queue render correctly");
+  // Queue is the only top-level entry into loading.
+  assert(await page.locator(".loader-stat-card").count() === 4, "Staging summary is incomplete");
+  assert(await page.locator(".loader-trip-card").count() === 1, "Released trip card is missing");
+  assert(
+    await page.getByRole("navigation", { name: "Loader navigation" }).getByRole("button").count() === 3,
+    "Loader navigation contains a redundant top-level screen"
+  );
+  results.push("Queue-first information architecture exposes three non-redundant navigation items");
 
-  // 3. LIFO MANIFEST: navigate and check layout
-  await page.locator(".loader-vehicle-card").first().getByRole("button", { name: /Open LIFO Checklist|View Cleared Manifest/ }).click();
-  await page.getByRole("heading", { name: "LIFO loading manifest", exact: true }).waitFor();
-  await page.screenshot({ path: ".impeccable/review/loader-manifest-initial.png", fullPage: true });
+  // Depot parity: a Peliyagoda trip cannot remain visible in Kandy.
+  await page.locator(".dispatch-context select").selectOption("Kandy");
+  assert(await page.locator(".loader-trip-card").count() === 0, "Cross-depot trip leaked into Kandy");
+  await page.locator(".dispatch-context select").selectOption("Peliyagoda");
+  results.push("Depot change prevents cross-depot manifest access");
 
-  assert(await page.locator("text=LIFO Staging Sequence").isVisible(), "LIFO staging sequence banner not visible");
-  assert(await page.locator(".workspace-panel .h-2.bg-muted.rounded-full").count() >= 3, "Payload progress bars not found");
+  await page.getByRole("button", { name: "Open loading checklist", exact: true }).click();
+  await page.getByRole("heading", { name: "WP-012 loading checklist", exact: true }).waitFor();
+  assert(await page.locator(".loader-lifo-banner").isVisible(), "LIFO instruction is missing");
+  const stopCards = page.locator(".loader-stop-card");
+  assert(await stopCards.count() === 2, "Expected two LIFO stop cards");
+  assert((await stopCards.first().innerText()).includes("Delivery Stop 2"), "Last delivery stop is not loaded first");
+  assert((await stopCards.last().innerText()).includes("Delivery Stop 1"), "Stop 1 is not placed nearest the rear door");
+  results.push("Checklist presents the exact reverse-stop LIFO sequence");
 
-  const clearBtn = page.getByRole("button", { name: /Clear for Departure/ });
-  assert(await clearBtn.isDisabled(), "Clear for Departure should be disabled before verification");
+  const clearButton = page.getByRole("button", { name: "Clear vehicle for departure", exact: true });
+  assert(await clearButton.isDisabled(), "Departure should be locked before physical verification");
+  assert(await page.getByRole("button", { name: /Verify all/i }).count() === 0, "Unsafe bulk verification is still present");
 
-  // 4. LIFO SKU CHECKLIST: toggle expand
-  const firstStopRow = page.locator(".workspace-panel .divide-y > div").first();
-  await firstStopRow.locator(".cursor-pointer").first().click();
-  await firstStopRow.locator(".cursor-pointer").first().click();
-  const firstSkuCheckbox = firstStopRow.locator("input[type=checkbox]").first();
-  if (await firstSkuCheckbox.count() > 0) { await firstSkuCheckbox.check(); }
-  results.push("LIFO manifest SKU checklist expands and individual SKU checkbox works");
+  // Per-SKU verification gates each stop.
+  const firstStop = stopCards.first();
+  const firstConfirm = firstStop.getByRole("button", { name: "Confirm stop loaded", exact: true });
+  assert(await firstConfirm.isDisabled(), "Stop confirmation should be locked before SKU checks");
+  const firstSkuChecks = firstStop.locator("input[type=checkbox]");
+  for (let index = 0; index < await firstSkuChecks.count(); index += 1) {
+    await firstSkuChecks.nth(index).check();
+  }
+  assert(await firstConfirm.isEnabled(), "Stop confirmation did not unlock after all SKU checks");
+  await firstConfirm.click();
+  results.push("Each stop requires per-SKU confirmation; no bulk verification shortcut remains");
 
-  // 5. VERIFY ALL STOPS (bulk)
-  await page.getByRole("button", { name: "Verify All Stops", exact: true }).click();
-  await page.waitForTimeout(300);
-  assert(await clearBtn.isEnabled(), "Clear for Departure should be enabled after Verify All Stops");
-  await page.screenshot({ path: ".impeccable/review/loader-manifest-all-verified.png", fullPage: true });
-  results.push("Verify All Stops enables the Clear for Departure button");
-
-  // 6. RESET VERIFICATION
-  await page.getByRole("button", { name: "Reset", exact: true }).click();
-  await page.waitForTimeout(200);
-  assert(await clearBtn.isDisabled(), "Clear for Departure should be disabled again after Reset");
-  results.push("Reset clears all verifications and re-gates the departure clearance");
-
-  // 7. FAIL-A EXCEPTION LOGGING
-  const logBtn = page.locator("button", { hasText: /Log Shortfall\/Damage/ }).first();
-  await logBtn.click();
-  await page.getByRole("dialog").waitFor();
-  await page.getByRole("dialog").locator("select").selectOption("damaged");
-  await page.getByRole("dialog").locator("input[type=number]").fill("3");
-  await page.getByRole("dialog").locator("textarea").fill("Crates punctured during pallet transfer.");
-  await page.getByRole("button", { name: "Log Exception & Notify Dispatch", exact: true }).click();
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
-  await page.waitForTimeout(300);
-
-  assert(await page.locator(".loader-badge.discrepancy").isVisible(), "Exception badge not shown after logging");
-  assert(await page.locator("text=/FAIL-A Exception/").count() >= 1, "FAIL-A exception line not shown");
-  await page.screenshot({ path: ".impeccable/review/loader-manifest-fail-a.png", fullPage: true });
-  results.push("FAIL-A exception dialog logs discrepancy and annotates the affected stop");
-
-  assert(await page.locator("text=/kg exception/").count() >= 1, "Payload recalculation annotation missing");
-  results.push("Payload bars recalculate and annotate exception weight reduction");
-
-  // 8. ALT-6 MANIFEST REVISION SIMULATION
-  await page.getByRole("button", { name: /Simulate Plan Change \(ALT-6\)/ }).click();
-  await page.waitForTimeout(300);
-
-  const revBanner = page.locator("text=High Priority Alert: Manifest Plan Revised (ALT-6)");
-  assert(await revBanner.isVisible(), "ALT-6 revision alert banner not shown");
-  assert(await page.locator("text=/v1\.0 → v1\./").count() >= 1, "Version transition badge not shown");
-  assert(await page.locator("text=/Re-ordered in .* \(ALT-6\)/").count() >= 1, "Re-ordered stop badge not shown");
-  assert(await clearBtn.isDisabled(), "Clearance gate should re-lock during ALT-6 revision");
-  await page.screenshot({ path: ".impeccable/review/loader-manifest-alt6.png", fullPage: true });
-  results.push("ALT-6 simulation shows banner, version badge, re-ordered highlights, and re-gates clearance");
-
-  await page.getByRole("button", { name: "Acknowledge & Re-verify LIFO", exact: true }).click();
-  await page.waitForTimeout(200);
-  assert(!(await revBanner.isVisible()), "ALT-6 banner should dismiss after acknowledgement");
-  results.push("Acknowledging ALT-6 revision clears the banner");
-
-  // 9. L5 DEPARTURE CLEARANCE SIGN-OFF
-  await page.getByRole("button", { name: "Verify All Stops", exact: true }).click();
-  await page.waitForTimeout(300);
-  assert(await clearBtn.isEnabled(), "Clear for Departure should be enabled after re-verify");
-
-  await clearBtn.click();
-  const clearModal = page.getByRole("dialog");
-  await clearModal.waitFor();
-  assert(await clearModal.getByText("Confirm Vehicle Departure Clearance (L5)").isVisible(), "L5 clearance modal title not found");
-  assert(await clearModal.locator("text=TRIP-01").isVisible(), "Trip ID not in clearance modal");
-  assert(await clearModal.locator("text=/Final Cleared Payload/").isVisible(), "Cleared payload summary missing");
-  await page.screenshot({ path: ".impeccable/review/loader-clearance-modal.png", fullPage: true });
-
-  await clearModal.getByRole("button", { name: "Confirm & Release Manifest", exact: true }).click();
-  await clearModal.waitFor({ state: "hidden" });
-  await page.getByRole("heading", { name: "Warehouse staging overview", exact: true }).waitFor();
-
-  const feedbackMsg = page.locator(".dispatch-feedback");
-  assert(await feedbackMsg.isVisible(), "No feedback message shown after clearance");
-  const feedbackText = await feedbackMsg.innerText();
-  assert(feedbackText.includes("TRIP-01"), `Feedback doesn't mention TRIP-01: "${feedbackText}"`);
-  await page.screenshot({ path: ".impeccable/review/loader-overview-after-clearance.png", fullPage: true });
-  results.push("L5 clearance modal confirms departure, returns to overview, shows feedback toast");
-
-  // 10. CLEARANCE PERSISTENCE across reload
-  await page.reload();
-  await page.getByRole("heading", { name: "Warehouse staging overview", exact: true }).waitFor();
-  const clearedCard = page.locator(".loader-vehicle-card").filter({ hasText: "TRIP-01" });
-  assert(await clearedCard.count() >= 1, "TRIP-01 card missing after reload");
-  assert(await clearedCard.locator(".loader-badge.cleared").count() >= 1, "Cleared badge missing after reload");
-  results.push("Departure clearance persists across reload — TRIP-01 shows Cleared badge");
-
-  const clearedStatCard = page.locator(".loader-stat-card").filter({ hasText: "Cleared Departures" });
-  const clearedStatValue = await clearedStatCard.locator(".loader-stat-value").innerText();
-  assert(clearedStatValue.includes("1"), `Cleared Departures stat should show 1, got: "${clearedStatValue}"`);
-  results.push("Cleared Departures metric increments correctly and survives reload");
-
-  // 11. MANIFEST LOCKED after clearance
-  await page.locator(".loader-vehicle-card").filter({ hasText: "TRIP-01" })
-    .getByRole("button", { name: /View Cleared Manifest/ }).click();
-  await page.getByRole("heading", { name: "LIFO loading manifest", exact: true }).waitFor();
-  const lockedBtn = page.getByRole("button", { name: "Cleared for Departure", exact: true });
-  assert(await lockedBtn.isVisible(), "Locked Cleared for Departure button not shown");
-  assert(await lockedBtn.isDisabled(), "Cleared manifest should be read-only");
-  assert(await page.getByRole("button", { name: "Verify All Stops", exact: true }).isDisabled(), "Verify All Stops should be disabled on cleared manifest");
-  await page.screenshot({ path: ".impeccable/review/loader-manifest-cleared-locked.png", fullPage: true });
-  results.push("Cleared manifest is fully read-only — all action buttons disabled");
-
-  // 12. DISCREPANCY LOG
+  // Progress survives navigation and reload.
   await page.getByRole("navigation", { name: "Loader navigation" })
-    .getByRole("button", { name: "Discrepancy log", exact: true }).click();
-  await page.getByRole("heading", { name: "Discrepancy log (FAIL-A)", exact: true }).waitFor();
-  assert(await page.locator("table tbody tr, .workspace-table tbody tr").count() >= 1, "Discrepancy log is empty");
-  await page.screenshot({ path: ".impeccable/review/loader-discrepancy-log.png", fullPage: true });
-  results.push("Discrepancy log shows logged FAIL-A exceptions");
+    .getByRole("button", { name: "Exception log", exact: true }).click();
+  await page.getByRole("button", { name: "Open loading checklist", exact: true }).click();
+  assert(await stopCards.first().getByRole("button", { name: "Undo stop verification", exact: true }).isVisible(), "Verification was lost after navigation");
+  await page.reload();
+  await page.getByRole("heading", { name: "Staging queue", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Open loading checklist", exact: true }).click();
+  assert(await page.locator(".loader-stop-card").first().getByRole("button", { name: "Undo stop verification", exact: true }).isVisible(), "Verification was lost after reload");
+  results.push("Trip verification progress persists across navigation and reload");
 
-  // 13. SIGNED-OUT GUARD
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await page.getByRole("heading", { name: "Sign in", exact: true }).waitFor();
-  await page.goto(`${base}/workspace/loader`);
-  await page.getByRole("heading", { name: "Sign in", exact: true }).waitFor();
-  results.push("Sign-out and logged-out navigation guard work correctly");
+  // Finish the second stop and clear departure.
+  const secondStop = page.locator(".loader-stop-card").last();
+  const secondSkuChecks = secondStop.locator("input[type=checkbox]");
+  for (let index = 0; index < await secondSkuChecks.count(); index += 1) {
+    await secondSkuChecks.nth(index).check();
+  }
+  await secondStop.getByRole("button", { name: "Confirm stop loaded", exact: true }).click();
+  assert(await clearButton.isEnabled(), "Departure did not unlock after all four gates passed");
+  await clearButton.click();
+  await page.getByRole("dialog").getByRole("button", { name: "Confirm and release", exact: true }).click();
+  await page.getByRole("heading", { name: "Staging queue", exact: true }).waitFor();
+  assert(await page.getByText("Departure cleared", { exact: true }).count() >= 1, "Cleared state is missing from the queue");
+  results.push("Departure clearance locks the verified manifest and returns to the queue");
 
-  // FINAL
-  assert(errors.length === 0, `Browser console errors: ${errors.join(", ")}`);
-  results.push("No JavaScript console errors throughout all loader scenarios");
-
+  // Start a clean, uncleared manifest and verify FAIL-A ownership.
   await page.evaluate(() => {
-    localStorage.removeItem("waypoint.demo.loader.discrepancies.v1");
     localStorage.removeItem("waypoint.demo.loader.clearances.v1");
+    localStorage.removeItem("waypoint.demo.loader.verifications.v1");
+    localStorage.removeItem("waypoint.demo.loader.discrepancies.v1");
   });
+  await page.reload();
+  await page.getByRole("heading", { name: "Staging queue", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Open loading checklist", exact: true }).click();
+  await page.locator(".loader-stop-card").first().getByRole("button", { name: "Report issue", exact: true }).first().click();
+  const issueDialog = page.getByRole("dialog");
+  await issueDialog.locator("select").selectOption("damaged");
+  await issueDialog.locator("input[type=number]").fill("3");
+  await issueDialog.locator("textarea").fill("Crates punctured during pallet transfer.");
+  await issueDialog.getByRole("button", { name: "Report and notify Dispatch", exact: true }).click();
+  assert(await clearButton.isDisabled(), "A pending dispatch decision did not lock departure");
+  await page.getByRole("navigation", { name: "Loader navigation" })
+    .getByRole("button", { name: "Exception log", exact: true }).click();
+  assert(await page.getByText("Waiting on Dispatch", { exact: true }).count() >= 1, "Pending dispatch instruction is not visible");
+  assert(await page.getByRole("button", { name: /^(Ship partial|Hold for replacement|Defer order)$/ }).count() === 0, "Loader can still choose a dispatcher-only resolution");
+  results.push("FAIL-A creates a dispatch hold; the loader view cannot choose the resolution");
 
+  assert(errors.length === 0, `Browser errors: ${errors.join(", ")}`);
+  results.push("No JavaScript errors were observed throughout the normalized flow");
+
+  await page.evaluate((keys) => {
+    keys.forEach((key) => localStorage.removeItem(key));
+  }, storageKeys);
   return results;
 }

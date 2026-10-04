@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  Boxes,
   CheckCircle2,
   CircleHelp,
-  Clock3,
   Layers,
-  LayoutDashboard,
   LoaderCircle,
   LogOut,
   MessageSquare,
@@ -17,9 +14,7 @@ import {
   PanelLeftOpen,
   ShieldAlert,
   ShieldCheck,
-  Truck,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +43,7 @@ import {
   LoaderManifest,
   type ClearanceRecord,
   type DiscrepancyRecord,
-  type DiscrepancyResolution,
+  type ManifestVerification,
 } from "./loader-manifest";
 import { LoaderDiscrepancies } from "./loader-discrepancies";
 
@@ -56,15 +51,18 @@ import "@/features/dispatcher/dispatcher.css";
 import "@/features/dispatcher/workspace.css";
 import "@/features/dispatcher/overview.css";
 import "@/features/dispatcher/operations.css";
+import "@/features/dispatcher/monochrome.css";
 import "./loader.css";
 
 type LoaderView = "overview" | "manifest" | "discrepancies" | "chat";
 
 const LOADER_DISCREPANCIES_KEY = "waypoint.demo.loader.discrepancies.v1";
 const LOADER_CLEARANCES_KEY = "waypoint.demo.loader.clearances.v1";
+const LOADER_VERIFICATIONS_KEY = "waypoint.demo.loader.verifications.v1";
 
 export function LoaderDashboard() {
   const router = useRouter();
+  const contentRef = useRef<HTMLElement>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [plan, setPlan] = useState<Plan>(initialPlan);
   const [depot, setDepot] = useState<Depot>("Peliyagoda");
@@ -73,6 +71,7 @@ export function LoaderDashboard() {
   const [selectedTripId, setSelectedTripId] = useState<string>("TRIP-01");
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [clearedTrips, setClearedTrips] = useState<Record<string, ClearanceRecord>>({});
+  const [verifications, setVerifications] = useState<Record<string, ManifestVerification>>({});
   const [message, setMessage] = useState("");
   const [failure, setFailure] = useState("");
   const [modal, setModal] = useState<"help" | null>(null);
@@ -93,7 +92,9 @@ export function LoaderDashboard() {
       notes: "Crushed during forklift pallet transfer",
       reportedBy: "LOAD001 (Warehouse Dock)",
       timestamp: "04:15",
-      resolution: "pending",
+      resolution: "ship_partial",
+      resolutionNotes: "Dispatch authorised a reduced manifest. Re-verify the affected stop before clearance.",
+      resolvedAt: "04:21",
     },
   ]);
 
@@ -140,10 +141,23 @@ export function LoaderDashboard() {
       } catch {
         // use initial
       }
+      try {
+        const storedVerifications = localStorage.getItem(LOADER_VERIFICATIONS_KEY);
+        if (storedVerifications) {
+          setVerifications(JSON.parse(storedVerifications));
+        }
+      } catch {
+        // use initial
+      }
     }, 0);
 
     return () => window.clearTimeout(timer);
   }, [router]);
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0 });
+    window.scrollTo({ top: 0, left: 0 });
+  }, [depot, view]);
 
   function saveWorkspace(next: WorkspaceState, feedback: string) {
     try {
@@ -185,45 +199,6 @@ export function LoaderDashboard() {
     }
   }
 
-  function handleUpdateResolution(
-    id: string,
-    resolution: DiscrepancyResolution,
-    resolutionNotes: string
-  ) {
-    const updated = discrepancies.map((d) =>
-      d.id === id
-        ? {
-            ...d,
-            resolution,
-            resolutionNotes,
-            resolvedAt: new Date().toLocaleTimeString("en-GB", {
-              timeZone: "Asia/Colombo",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          }
-        : d
-    );
-    setDiscrepancies(updated);
-    try {
-      localStorage.setItem(LOADER_DISCREPANCIES_KEY, JSON.stringify(updated));
-      setMessage(`Discrepancy ${id} resolution updated: ${resolution.replace("_", " ")}.`);
-    } catch {
-      // storage fallback
-    }
-  }
-
-  function handleResolveDiscrepancy(id: string) {
-    const updated = discrepancies.filter((d) => d.id !== id);
-    setDiscrepancies(updated);
-    try {
-      localStorage.setItem(LOADER_DISCREPANCIES_KEY, JSON.stringify(updated));
-      setMessage("Discrepancy record dismissed.");
-    } catch {
-      // storage fallback
-    }
-  }
-
   function handleClearDeparture(tripId: string, clearance: ClearanceRecord) {
     const updated = { ...clearedTrips, [tripId]: clearance };
     setClearedTrips(updated);
@@ -247,6 +222,16 @@ export function LoaderDashboard() {
       `Trip ${tripId} cleared for departure. Manifest transmitted to driver client.`
     );
     setView("overview");
+  }
+
+  function handleVerificationChange(tripId: string, next: ManifestVerification) {
+    const updated = { ...verifications, [tripId]: next };
+    setVerifications(updated);
+    try {
+      localStorage.setItem(LOADER_VERIFICATIONS_KEY, JSON.stringify(updated));
+    } catch {
+      setFailure("Loading verification progress could not be saved.");
+    }
   }
 
   function signOut() {
@@ -279,8 +264,7 @@ export function LoaderDashboard() {
         <nav aria-label="Loader navigation">
           {(
             [
-            { id: "overview", label: "Staging queue", Icon: Layers },
-              { id: "manifest", label: "Loading checklist", Icon: Truck },
+              { id: "overview", label: "Staging queue", Icon: Layers },
               { id: "discrepancies", label: "Exception log", Icon: ShieldAlert },
               { id: "chat", label: "Comms", Icon: MessageSquare },
             ] as const
@@ -289,7 +273,12 @@ export function LoaderDashboard() {
               key={id}
               aria-label={label}
               title={navCollapsed ? label : undefined}
-              aria-current={view === id ? "page" : undefined}
+              aria-current={
+                (id === "overview" && (view === "overview" || view === "manifest")) ||
+                view === id
+                  ? "page"
+                  : undefined
+              }
               onClick={() => {
                 setView(id);
                 setMessage("");
@@ -371,7 +360,7 @@ export function LoaderDashboard() {
           </div>
         </header>
 
-        <main className="dispatch-content">
+        <main ref={contentRef} className="dispatch-content dispatch-content-scrollable loader-content">
           {/* Header Bar & Depot Switcher */}
           <div className="dispatch-heading">
             <div>
@@ -401,8 +390,13 @@ export function LoaderDashboard() {
                 <select
                   value={depot}
                   onChange={(e) => {
-                    setDepot(e.target.value as Depot);
-                    setMessage(`Switched to ${e.target.value} warehouse staging.`);
+                    const nextDepot = e.target.value as Depot;
+                    setDepot(nextDepot);
+                    setSelectedTripId(
+                      plan.trips.find((trip) => trip.depot === nextDepot)?.id ?? ""
+                    );
+                    if (view === "manifest") setView("overview");
+                    setMessage(`Switched to ${nextDepot} warehouse staging.`);
                   }}
                 >
                   <option value="Peliyagoda">Peliyagoda</option>
@@ -473,6 +467,8 @@ export function LoaderDashboard() {
               discrepancies={discrepancies}
               onAddDiscrepancy={handleAddDiscrepancy}
               onClearDeparture={handleClearDeparture}
+              verification={verifications[selectedTripId] ?? { checkedStops: [], checkedSkus: {} }}
+              onVerificationChange={(next) => handleVerificationChange(selectedTripId, next)}
               isCleared={!!clearedTrips[selectedTripId]}
             />
           )}
@@ -480,8 +476,10 @@ export function LoaderDashboard() {
           {view === "discrepancies" && (
             <LoaderDiscrepancies
               discrepancies={activeDepotDiscrepancies}
-              onResolve={handleResolveDiscrepancy}
-              onUpdateResolution={handleUpdateResolution}
+              onOpenTrip={(tripId) => {
+                setSelectedTripId(tripId);
+                setView("manifest");
+              }}
             />
           )}
 

@@ -5,7 +5,11 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ClipboardCheck,
+  PackageCheck,
   Search,
+  ShieldAlert,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +21,8 @@ import {
   type Plan,
 } from "@/features/dispatcher/planning";
 import type { ClearanceRecord, DiscrepancyRecord } from "./loader-manifest";
+
+type QueueFilter = "all" | "ready" | "blocked" | "cleared";
 
 export function LoaderOverview({
   plan,
@@ -32,89 +38,143 @@ export function LoaderOverview({
   onSelectTrip: (tripId: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "cleared" | "exception">("all");
+  const [statusFilter, setStatusFilter] = useState<QueueFilter>("all");
 
-  const depotTrips = plan.trips.filter((t) => t.depot === depot);
+  const depotTrips = plan.trips.filter((trip) => trip.depot === depot);
 
-  const filteredTrips = depotTrips.filter((trip) => {
-    const hasException = discrepancies.some((d) => d.tripId === trip.id);
-    const isCleared = !!clearedTrips[trip.id];
+  const queue = depotTrips.map((trip) => {
+    const vehicle = vehicles.find((item) => item.id === trip.vehicleId);
+    const assignedOrders = trip.orderIds
+      .map((id) => orders.find((order) => order.id === id))
+      .filter((order) => order !== undefined);
+    const loadTotals = totals(trip);
+    const tripExceptions = discrepancies.filter((item) => item.tripId === trip.id);
+    const blockingExceptions = tripExceptions.filter(
+      (item) => item.resolution !== "ship_partial"
+    );
+    const isCleared = Boolean(clearedTrips[trip.id]);
+    const capacityValid = Boolean(
+      vehicle && loadTotals.kg <= vehicle.kg && loadTotals.m3 <= vehicle.m3
+    );
+    const temperatureValid = Boolean(
+      vehicle && (!assignedOrders.some((order) => order.chilled) || vehicle.chilled)
+    );
+    const accessValid = Boolean(
+      vehicle && (!assignedOrders.some((order) => order.vanOnly) || vehicle.type === "Van")
+    );
+    const depotValid = Boolean(
+      vehicle &&
+      vehicle.depot === depot &&
+      !vehicle.workshop &&
+      assignedOrders.every((order) => order.depot === depot)
+    );
+    const routeValid =
+      new Set(assignedOrders.map((order) => order.brand)).size <= 1 &&
+      new Set(assignedOrders.map((order) => order.district)).size <= 1 &&
+      new Set(trip.orderIds).size === trip.orderIds.length;
+    const constraintsValid =
+      capacityValid && temperatureValid && accessValid && depotValid && routeValid;
+    const status: Exclude<QueueFilter, "all"> = isCleared
+      ? "cleared"
+      : blockingExceptions.length > 0 || !constraintsValid
+        ? "blocked"
+        : "ready";
 
+    return {
+      assignedOrders,
+      blockingExceptions,
+      constraintsValid,
+      isCleared,
+      loadTotals,
+      status,
+      trip,
+      tripExceptions,
+      vehicle,
+    };
+  });
+
+  const filteredTrips = queue.filter((item) => {
+    const normalizedQuery = query.trim().toLowerCase();
     const matchesSearch =
-      trip.id.toLowerCase().includes(query.toLowerCase()) ||
-      trip.vehicleId.toLowerCase().includes(query.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "cleared" && isCleared) ||
-      (statusFilter === "exception" && hasException && !isCleared) ||
-      (statusFilter === "pending" && !isCleared && !hasException);
-
+      normalizedQuery.length === 0 ||
+      item.trip.id.toLowerCase().includes(normalizedQuery) ||
+      item.trip.vehicleId.toLowerCase().includes(normalizedQuery) ||
+      item.assignedOrders.some((order) =>
+        order.outlet.toLowerCase().includes(normalizedQuery)
+      );
+    const matchesStatus = statusFilter === "all" || item.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const clearedCount = depotTrips.filter((t) => !!clearedTrips[t.id]).length;
-  const exceptionCount = depotTrips.filter(
-    (t) => discrepancies.some((d) => d.tripId === t.id) && !clearedTrips[t.id]
-  ).length;
-  const pendingCount = depotTrips.length - clearedCount - exceptionCount;
+  const readyCount = queue.filter((item) => item.status === "ready").length;
+  const blockedCount = queue.filter((item) => item.status === "blocked").length;
+  const clearedCount = queue.filter((item) => item.status === "cleared").length;
 
   return (
-    <div className="space-y-5">
-      {/* Summary stat row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="loader-page-stack">
+      <section className="loader-workflow" aria-labelledby="loader-workflow-title">
+        <div>
+          <span className="loader-eyebrow">Standard loading flow</span>
+          <h2 id="loader-workflow-title">One trip, one controlled handoff</h2>
+        </div>
+        <ol>
+          <li><strong>1</strong><span>Open released trip</span></li>
+          <li><strong>2</strong><span>Load last stop first</span></li>
+          <li><strong>3</strong><span>Report any issue</span></li>
+          <li><strong>4</strong><span>Clear departure</span></li>
+        </ol>
+      </section>
+
+      <section className="loader-summary-strip" aria-label="Staging summary">
         {[
-          { label: "Total vehicles", value: depotTrips.length },
-          { label: "Staging", value: pendingCount },
-          { label: "Exceptions", value: exceptionCount, warn: exceptionCount > 0 },
-          { label: "Cleared", value: clearedCount, ok: clearedCount > 0 },
-        ].map(({ label, value, warn, ok }) => (
-          <div key={label} className="workspace-panel p-4">
-            <p className="text-xs text-muted-foreground mb-1">{label}</p>
-            <p className={`text-2xl font-bold tabular-nums ${warn ? "text-amber-600" : ok ? "text-emerald-600" : "text-foreground"}`}>
-              {value}
-            </p>
-          </div>
+          { label: "Released trips", value: queue.length, Icon: Truck },
+          { label: "Ready to load", value: readyCount, Icon: PackageCheck },
+          { label: "Waiting on Dispatch", value: blockedCount, Icon: ShieldAlert },
+          { label: "Departure cleared", value: clearedCount, Icon: CheckCircle2 },
+        ].map(({ label, value, Icon }) => (
+          <article className="loader-stat-card" key={label}>
+            <span className="loader-stat-icon" aria-hidden="true"><Icon size={19} /></span>
+            <span className="loader-stat-body">
+              <span className="loader-stat-label">{label}</span>
+              <strong className="loader-stat-value">{value}</strong>
+            </span>
+          </article>
         ))}
-      </div>
+      </section>
 
-      {/* Vehicle queue table */}
-      <div className="workspace-panel">
-        <div className="workspace-panel-heading">
+      <section className="workspace-panel loader-queue-panel" aria-labelledby="loader-queue-title">
+        <div className="workspace-panel-heading loader-queue-heading">
           <div>
-            <h2>Vehicle staging queue</h2>
-            <span>Select a vehicle to open the loading checklist.</span>
+            <h2 id="loader-queue-title">Vehicle staging queue</h2>
+            <span>Only trips released to the selected depot appear here.</span>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
+          <div className="loader-queue-tools">
+            <label className="loader-search">
+              <Search size={15} aria-hidden="true" />
+              <span className="sr-only">Search trips</span>
               <input
-                type="text"
-                placeholder="Search trip or vehicle…"
+                type="search"
+                placeholder="Trip, vehicle or outlet"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="dispatch-search pl-8 pr-3 py-1.5 text-xs rounded-md"
+                onChange={(event) => setQuery(event.target.value)}
               />
-            </div>
-
-            <div className="flex items-center gap-1 bg-muted p-0.5 rounded-md border text-xs">
-              {(["all", "pending", "exception", "cleared"] as const).map((s) => (
+            </label>
+            <div className="loader-segmented" aria-label="Filter staging queue">
+              {(["all", "ready", "blocked", "cleared"] as QueueFilter[]).map((filter) => (
                 <button
-                  key={s}
+                  key={filter}
                   type="button"
-                  className={`px-2.5 py-1 rounded font-medium transition capitalize ${
-                    statusFilter === s
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                  onClick={() => setStatusFilter(s)}
+                  aria-pressed={statusFilter === filter}
+                  onClick={() => setStatusFilter(filter)}
                 >
-                  {s === "all" ? "All" : s === "pending" ? "Staging" : s === "exception" ? "Exception" : "Cleared"}
+                  {filter === "all"
+                    ? "All"
+                    : filter === "ready"
+                      ? "Ready"
+                      : filter === "blocked"
+                        ? "Needs attention"
+                        : "Cleared"}
                 </button>
               ))}
             </div>
@@ -122,85 +182,112 @@ export function LoaderOverview({
         </div>
 
         {filteredTrips.length === 0 ? (
-          <div className="p-16 text-center text-sm text-muted-foreground">
-            No vehicles match the selected filter.
+          <div className="loader-empty-state">
+            <ClipboardCheck size={30} aria-hidden="true" />
+            <strong>No trips match this view</strong>
+            <span>Try another filter, search term, or depot.</span>
           </div>
         ) : (
-          <div className="workspace-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Trip</th>
-                  <th>Vehicle</th>
-                  <th>Departure</th>
-                  <th>Stops</th>
-                  <th>Payload</th>
-                  <th>Status</th>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTrips.map((trip) => {
-                  const vehicle = vehicles.find((v) => v.id === trip.vehicleId);
-                  const loadTotals = totals(trip);
-                  const tripExceptions = discrepancies.filter((d) => d.tripId === trip.id);
-                  const isCleared = !!clearedTrips[trip.id];
-                  const clearanceData = clearedTrips[trip.id];
-                  const hasException = tripExceptions.length > 0 && !isCleared;
+          <div className="loader-queue-grid">
+            {filteredTrips.map((item) => {
+              const clearance = clearedTrips[item.trip.id];
+              const weightPercent = item.vehicle
+                ? Math.round((item.loadTotals.kg / item.vehicle.kg) * 100)
+                : 0;
+              const volumePercent = item.vehicle
+                ? Math.round((item.loadTotals.m3 / item.vehicle.m3) * 100)
+                : 0;
+              const reverseStops = [...item.assignedOrders].reverse();
 
-                  return (
-                    <tr key={trip.id}>
-                      <td className="font-mono font-semibold text-foreground">{trip.id}</td>
-                      <td>
-                        <span className="font-semibold">{trip.vehicleId}</span>
-                        {vehicle?.chilled && (
-                          <span className="ml-1.5 text-[10px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-medium">
-                            Reefer
-                          </span>
-                        )}
-                        <span className="block text-xs text-muted-foreground">{vehicle?.type}</span>
-                      </td>
-                      <td className="tabular-nums">{formatTime(trip.departure)}</td>
-                      <td className="tabular-nums">{trip.orderIds.length}</td>
-                      <td className="tabular-nums text-xs">
-                        {isCleared
-                          ? `${clearanceData.finalKg} kg / ${clearanceData.finalM3} m³`
-                          : `${loadTotals.kg} kg / ${loadTotals.m3} m³`}
-                      </td>
-                      <td>
-                        {isCleared ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            <CheckCircle2 size={11} /> Cleared
-                          </span>
-                        ) : hasException ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                            <AlertTriangle size={11} /> Exception
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold text-muted-foreground">
-                            Staging
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-right">
-                        <Button
-                          size="sm"
-                          variant={isCleared ? "outline" : "default"}
-                          className="text-xs gap-1"
-                          onClick={() => onSelectTrip(trip.id)}
-                        >
-                          {isCleared ? "View manifest" : "Open checklist"}
-                          <ArrowRight size={13} />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              return (
+                <article className="loader-trip-card" key={item.trip.id}>
+                  <header>
+                    <div>
+                      <span className="loader-eyebrow">{item.trip.id}</span>
+                      <h3>{item.trip.vehicleId}</h3>
+                      <p>
+                        {item.vehicle?.type ?? "Vehicle unavailable"}
+                        {item.vehicle?.chilled ? " · Refrigerated" : " · Ambient"}
+                      </p>
+                    </div>
+                    <span className="loader-status-badge" data-status={item.status}>
+                      {item.status === "cleared"
+                        ? "Departure cleared"
+                        : item.status === "blocked"
+                          ? "Needs attention"
+                          : "Ready to load"}
+                    </span>
+                  </header>
+
+                  <dl className="loader-trip-facts">
+                    <div><dt>Departure</dt><dd>{formatTime(item.trip.departure)}</dd></div>
+                    <div><dt>Stops</dt><dd>{item.assignedOrders.length}</dd></div>
+                    <div><dt>Route group</dt><dd>{item.assignedOrders[0]?.brand ?? "—"} · {item.assignedOrders[0]?.district ?? "—"}</dd></div>
+                  </dl>
+
+                  <div className="loader-capacity-grid" aria-label="Vehicle payload">
+                    <div>
+                      <span><b>Weight</b><em>{item.loadTotals.kg} / {item.vehicle?.kg ?? 0} kg</em></span>
+                      <progress max="100" value={Math.min(weightPercent, 100)} />
+                    </div>
+                    <div>
+                      <span><b>Volume</b><em>{item.loadTotals.m3} / {item.vehicle?.m3 ?? 0} m³</em></span>
+                      <progress max="100" value={Math.min(volumePercent, 100)} />
+                    </div>
+                  </div>
+
+                  <div className="loader-load-order">
+                    <span>Load sequence · last delivery first</span>
+                    <ol>
+                      {reverseStops.map((order, index) => (
+                        <li key={order.id}>
+                          <strong>{index + 1}</strong>
+                          <span>{order.outlet}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  {item.blockingExceptions.length > 0 && (
+                    <div className="loader-inline-alert" role="status">
+                      <AlertTriangle size={16} aria-hidden="true" />
+                      <span>
+                        {item.blockingExceptions.length} issue{item.blockingExceptions.length === 1 ? "" : "s"} awaiting a dispatch instruction. Departure remains locked.
+                      </span>
+                    </div>
+                  )}
+
+                  {!item.constraintsValid && (
+                    <div className="loader-inline-alert" role="alert">
+                      <AlertTriangle size={16} aria-hidden="true" />
+                      <span>Published trip does not pass depot, route, thermal or capacity checks. Do not load.</span>
+                    </div>
+                  )}
+
+                  <footer>
+                    <span>
+                      {item.isCleared
+                        ? `Cleared at ${clearance.clearedAt}`
+                        : item.tripExceptions.length > 0
+                          ? `${item.tripExceptions.length} exception record${item.tripExceptions.length === 1 ? "" : "s"}`
+                          : "No exceptions reported"}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant={item.isCleared ? "outline" : "default"}
+                      onClick={() => onSelectTrip(item.trip.id)}
+                      disabled={!item.constraintsValid}
+                    >
+                      {item.isCleared ? "View cleared manifest" : "Open loading checklist"}
+                      <ArrowRight size={15} aria-hidden="true" />
+                    </Button>
+                  </footer>
+                </article>
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

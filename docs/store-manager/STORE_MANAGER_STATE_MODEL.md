@@ -44,7 +44,6 @@ stateDiagram-v2
   ORDER_RECORDED --> CANCELLED: Store Manager Cancels
   
   QUEUED_NEXT_RUN --> ORDER_RECORDED: 16:00 Rollover Batch
-  QUEUED_NEXT_RUN --> CANCELLED: Store Manager Cancels
   
   ASSIGNED --> IN_TRANSIT: Driver Departs Depot
   ASSIGNED --> ORDER_RECORDED: Dispatcher Defers Order (FAIL-B)
@@ -63,7 +62,7 @@ stateDiagram-v2
 | State | Edit Quantities | Cancel Order | View Assigned Vehicle | View Live ETA | Inspect Digital POD | File Claim |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `ORDER_RECORDED` | ⚠️ Re-order / New | ✅ YES | ❌ Not yet | ❌ Not yet | ❌ No | ❌ No |
-| `QUEUED_NEXT_RUN`| ⚠️ Re-order / New | ✅ YES | ❌ Not yet | ❌ Not yet | ❌ No | ❌ No |
+| `QUEUED_NEXT_RUN`| ⚠️ Re-order / New | ❌ Cutoff locked | ❌ Not yet | ❌ Not yet | ❌ No | ❌ No |
 | `ASSIGNED` | ❌ Locked | ❌ Locked | ✅ YES | ⚠️ Planned Window| ❌ No | ❌ No |
 | `IN_TRANSIT` | ❌ Locked | ❌ Locked | ✅ YES | ✅ Live ETA | ❌ No | ❌ No |
 | `DELIVERED` | ❌ Terminal | ❌ Terminal | ✅ YES | 🏁 Delivered | ✅ YES | ✅ YES (`SM-3`) |

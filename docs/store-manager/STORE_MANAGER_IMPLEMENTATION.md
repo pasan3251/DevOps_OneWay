@@ -49,7 +49,7 @@ apps/api/src/store/
   - Full metadata header with status badge and cutoff lock status.
   - Temperature requirement and store assignment.
   - Itemized table with product code, name, requested qty, unit weight, and unit volume.
-  - Contextual cancellation action: Active only while in `ORDER_RECORDED` or `QUEUED_NEXT_RUN` before cutoff.
+  - Contextual cancellation action: Active only while in `ORDER_RECORDED`, not cutoff-locked, and the live Colombo time remains before 16:00.
 
 ### 2.4. Deliveries & Receiving Verification (`deliveries-view.tsx`)
 - **Active Shipments Tracker**: Shows stops assigned to the store with vehicle type, driver name, contact phone, and route ETA.

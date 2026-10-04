@@ -4,15 +4,35 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { DRIZZLE_ORM, DrizzleDb } from '../database/database.module';
 import * as schema from '../database/schema';
 import { CreateOrderDto, OrderFilterDto } from './dto/order.dto';
+import { RequestUser } from '../common/decorators/current-user.decorator';
 
 @Injectable()
 export class OrdersService {
   constructor(@Inject(DRIZZLE_ORM) private readonly db: DrizzleDb) {}
+
+  private getColomboOrderCycle() {
+    const now = new Date();
+    const colomboNow = new Date(now.getTime() + 330 * 60 * 1000);
+    const isPastCutoff = colomboNow.getUTCHours() >= 16;
+    const earliestDelivery = new Date(
+      Date.UTC(
+        colomboNow.getUTCFullYear(),
+        colomboNow.getUTCMonth(),
+        colomboNow.getUTCDate() + (isPastCutoff ? 2 : 1),
+      ),
+    );
+
+    return {
+      isPastCutoff,
+      earliestDeliveryDate: earliestDelivery.toISOString().slice(0, 10),
+    };
+  }
 
   async createOrder(dto: CreateOrderDto, userId?: string) {
     if (!dto.items || dto.items.length === 0) {
@@ -41,6 +61,13 @@ export class OrdersService {
       );
     }
 
+    const orderCycle = this.getColomboOrderCycle();
+    if (dto.orderDate < orderCycle.earliestDeliveryDate) {
+      throw new BadRequestException(
+        `The earliest eligible delivery date is ${orderCycle.earliestDeliveryDate} for the current 16:00 Colombo order cycle`,
+      );
+    }
+
     // 3. Enforce Fresh Dual-Order Invariant (BR-ORD-002)
     const existingOrder = await this.db.query.orders.findFirst({
       where: and(
@@ -57,10 +84,7 @@ export class OrdersService {
     }
 
     // 4. Calculate Operational 16:00 Cutoff (BR-ORD-001)
-    const now = new Date();
-    // Default Colombo is UTC+5:30
-    const colomboHour = (now.getUTCHours() + 5 + Math.floor((now.getUTCMinutes() + 30) / 60)) % 24;
-    const isPastCutoff = colomboHour >= 16;
+    const isPastCutoff = orderCycle.isPastCutoff;
     const orderStatus = isPastCutoff ? 'QUEUED_NEXT_RUN' : 'ORDER_RECORDED';
 
     // 5. Fetch Products and compute weights, volumes, and prices
@@ -200,7 +224,7 @@ export class OrdersService {
     };
   }
 
-  async getOrderById(orderId: string) {
+  async getOrderById(orderId: string, user?: RequestUser) {
     const order = await this.db.query.orders.findFirst({
       where: eq(schema.orders.id, orderId),
       with: {
@@ -223,10 +247,17 @@ export class OrdersService {
       throw new NotFoundException(`Order with ID '${orderId}' not found`);
     }
 
+    if (
+      user?.role === 'store_manager' &&
+      (!user.outletId || order.outletId !== user.outletId)
+    ) {
+      throw new ForbiddenException('Store Managers can only view orders for their assigned outlet');
+    }
+
     return order;
   }
 
-  async cancelOrder(orderId: string, userId?: string) {
+  async cancelOrder(orderId: string, user?: RequestUser) {
     const order = await this.db.query.orders.findFirst({
       where: eq(schema.orders.id, orderId),
     });
@@ -235,9 +266,20 @@ export class OrdersService {
       throw new NotFoundException(`Order with ID '${orderId}' not found`);
     }
 
-    if (order.status !== 'ORDER_RECORDED' && order.status !== 'QUEUED_NEXT_RUN') {
+    if (
+      user?.role === 'store_manager' &&
+      (!user.outletId || order.outletId !== user.outletId)
+    ) {
+      throw new ForbiddenException('Store Managers can only cancel orders for their assigned outlet');
+    }
+
+    if (
+      order.status !== 'ORDER_RECORDED' ||
+      order.isCutoffLocked ||
+      this.getColomboOrderCycle().isPastCutoff
+    ) {
       throw new BadRequestException(
-        `Cannot cancel order in status '${order.status}'. Only unassigned recorded orders can be cancelled`,
+        'This order is locked. Only a recorded order in the current pre-cutoff cycle can be cancelled',
       );
     }
 

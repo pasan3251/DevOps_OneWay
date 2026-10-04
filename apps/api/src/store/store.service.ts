@@ -50,7 +50,7 @@ export class StoreService {
     }
 
     // 2. Cutoff Time & Schedule calculations (16:00 Colombo time)
-    const { hour, minute, dateStr } = this.getColomboNow();
+    const { now: colomboNow, hour, minute, dateStr } = this.getColomboNow();
     const isPastCutoff = hour >= 16;
     let minutesToCutoff = 0;
     if (!isPastCutoff) {
@@ -58,12 +58,17 @@ export class StoreService {
     }
 
     // Compute next delivery date
-    const d = new Date();
     const advanceDays = isPastCutoff ? 2 : 1;
-    d.setDate(d.getDate() + advanceDays);
-    const nextDeliveryYear = d.getFullYear();
-    const nextDeliveryMonth = String(d.getMonth() + 1).padStart(2, '0');
-    const nextDeliveryDay = String(d.getDate()).padStart(2, '0');
+    const nextDelivery = new Date(
+      Date.UTC(
+        colomboNow.getUTCFullYear(),
+        colomboNow.getUTCMonth(),
+        colomboNow.getUTCDate() + advanceDays,
+      ),
+    );
+    const nextDeliveryYear = nextDelivery.getUTCFullYear();
+    const nextDeliveryMonth = String(nextDelivery.getUTCMonth() + 1).padStart(2, '0');
+    const nextDeliveryDay = String(nextDelivery.getUTCDate()).padStart(2, '0');
     const nextDeliveryDate = `${nextDeliveryYear}-${nextDeliveryMonth}-${nextDeliveryDay}`;
 
     const cutoffInfo = {
@@ -91,6 +96,7 @@ export class StoreService {
       assigned: storeOrders.filter((o) => o.status === 'ASSIGNED').length,
       inTransit: storeOrders.filter((o) => o.status === 'IN_TRANSIT').length,
       delivered: storeOrders.filter((o) => o.status === 'DELIVERED').length,
+      deferred: storeOrders.filter((o) => o.status === 'DEFICIT_PENDING').length,
     };
 
     const recentOrders = storeOrders.slice(0, 5).map((o) => ({
@@ -104,6 +110,9 @@ export class StoreService {
       totalVolumeM3: o.totalVolumeM3,
       isCutoffLocked: o.isCutoffLocked,
       submissionTime: o.submissionTime,
+      deferredCount: o.deferredCount,
+      lastDeferredDate: o.lastDeferredDate,
+      deferralReason: o.deferralReason,
     }));
 
     // 4. Inbound Deliveries for Today (Supports Dual-Delivery Split ETAs: ALT-1)
@@ -151,6 +160,7 @@ export class StoreService {
         operatingDate: stop.trip?.operatingDate || dateStr,
         orderId: stop.orderId,
         orderNumber: stop.order?.orderNumber || 'N/A',
+        brand: stop.order?.brand,
         tempRequirement: stop.order?.tempRequirement || 'ambient',
         stopSequence: stop.stopSequence,
         status: deliveryStatus,
@@ -165,7 +175,18 @@ export class StoreService {
         driverPhone,
         totalItemsCount: stop.order?.totalItemsCount || 0,
         totalWeightKg: stop.order?.totalWeightKg || '0.00',
-        hasPod: !!stop.proofOfDelivery,
+        proofOfDelivery: stop.proofOfDelivery
+          ? {
+              id: stop.proofOfDelivery.id,
+              storeRepName: stop.proofOfDelivery.storeRepName,
+              signatureUrl: stop.proofOfDelivery.storeRepSignatureUrl,
+              photoUrl: stop.proofOfDelivery.photoEvidenceUrl,
+              driverNotes: stop.proofOfDelivery.driverNotes,
+              geoLatitude: stop.proofOfDelivery.geoLatitude,
+              geoLongitude: stop.proofOfDelivery.geoLongitude,
+              capturedAt: stop.proofOfDelivery.capturedAt,
+            }
+          : null,
       };
     });
 
@@ -216,24 +237,26 @@ export class StoreService {
       limit: 50,
     });
 
-    return stops.map((stop) => {
-      let displayStatus: 'SCHEDULED' | 'IN_TRANSIT' | 'ARRIVED' | 'DELIVERED' | 'FAILED' = 'SCHEDULED';
-      if (stop.status === 'DELIVERED') {
-        displayStatus = 'DELIVERED';
-      } else if (stop.status === 'ARRIVED' || stop.status === 'UNLOADING') {
-        displayStatus = 'ARRIVED';
-      } else if (stop.trip?.status === 'EN_ROUTE') {
-        displayStatus = 'IN_TRANSIT';
-      } else if (stop.status === 'FAILED') {
-        displayStatus = 'FAILED';
-      }
+    return stops
+      .filter((stop) => !filter?.date || stop.trip?.operatingDate === filter.date)
+      .map((stop) => {
+        let displayStatus: 'SCHEDULED' | 'IN_TRANSIT' | 'ARRIVED' | 'DELIVERED' | 'FAILED' = 'SCHEDULED';
+        if (stop.status === 'DELIVERED') {
+          displayStatus = 'DELIVERED';
+        } else if (stop.status === 'ARRIVED' || stop.status === 'UNLOADING') {
+          displayStatus = 'ARRIVED';
+        } else if (stop.trip?.status === 'EN_ROUTE') {
+          displayStatus = 'IN_TRANSIT';
+        } else if (stop.status === 'FAILED') {
+          displayStatus = 'FAILED';
+        }
 
-      const driverName = stop.trip?.driver?.user
-        ? `${stop.trip.driver.user.firstName} ${stop.trip.driver.user.lastName}`
-        : stop.trip?.driver?.licenseNumber || 'Assigned Driver';
-      const driverPhone = stop.trip?.driver?.user?.phone || 'N/A';
+        const driverName = stop.trip?.driver?.user
+          ? `${stop.trip.driver.user.firstName} ${stop.trip.driver.user.lastName}`
+          : stop.trip?.driver?.licenseNumber || 'Assigned Driver';
+        const driverPhone = stop.trip?.driver?.user?.phone || 'N/A';
 
-      return {
+        const delivery = {
         tripStopId: stop.id,
         tripId: stop.tripId,
         tripNumber: stop.trip?.tripNumber || 'N/A',
@@ -275,8 +298,15 @@ export class StoreService {
           notes: d.notes,
           createdAt: d.createdAt,
         })),
-      };
-    });
+        };
+        return delivery;
+      })
+      .filter(
+        (delivery) =>
+          !filter?.status ||
+          delivery.stopStatus === filter.status ||
+          delivery.status === filter.status,
+      );
   }
 
   /**
@@ -297,6 +327,23 @@ export class StoreService {
 
     if (!order) {
       throw new NotFoundException('Specified order was not found for your retail store');
+    }
+
+    if (order.status !== 'DELIVERED') {
+      throw new BadRequestException('A receiving discrepancy can only be reported after the delivery is completed');
+    }
+
+    if (dto.tripStopId) {
+      const stop = await this.db.query.tripStops.findFirst({
+        where: and(
+          eq(schema.tripStops.id, dto.tripStopId),
+          eq(schema.tripStops.orderId, order.id),
+          eq(schema.tripStops.outletId, user.outletId),
+        ),
+      });
+      if (!stop || stop.status !== 'DELIVERED') {
+        throw new BadRequestException('The selected delivery stop is not eligible for a receiving claim');
+      }
     }
 
     // 2. Generate Unique Claim Number

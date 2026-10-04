@@ -134,7 +134,7 @@ All Store Manager endpoints operate under `/api/v1/`, require a valid Bearer JWT
 ### 2.4 Cancel Order (Pre-Cutoff)
 - **Path**: `POST /api/v1/orders/:id/cancel`
 - **Authorized Role**: `store_manager`, `admin`
-- **Business Rule**: Allowed only if status is `ORDER_RECORDED` or `QUEUED_NEXT_RUN`.
+- **Business Rule**: Allowed only while status is `ORDER_RECORDED`, `isCutoffLocked` is false, and the live Colombo time is still before 16:00. A `QUEUED_NEXT_RUN` order is already cutoff-locked and cannot be cancelled by the store.
 - **Response `200 OK`**:
   ```json
   {

@@ -54,10 +54,10 @@ This catalog defines the authoritative business rules, operational constraints, 
 ---
 
 ### `SM-ORD-005`: Pre-Cutoff Order Cancellation
-- **Rule**: A Store Manager may cancel an order only while it remains in unassigned status (`ORDER_RECORDED` or `QUEUED_NEXT_RUN`). Once the Central Dispatcher has incorporated the order into a route plan (`ASSIGNED`) or the vehicle has departed (`IN_TRANSIT`), cancellation by the Store Manager is blocked.
+- **Rule**: A Store Manager may cancel an order only while it remains `ORDER_RECORDED`, is not cutoff-locked, and the live Colombo time is before 16:00. `QUEUED_NEXT_RUN` is produced after cutoff and is therefore locked. Once Dispatch processing or the cutoff begins, cancellation by the Store Manager is blocked.
 - **Affected Entity**: `orders`
 - **Trigger**: Store Manager triggers "Cancel Order".
-- **Preconditions**: `order.status IN ('ORDER_RECORDED', 'QUEUED_NEXT_RUN')`.
+- **Preconditions**: `order.status = 'ORDER_RECORDED'`, `is_cutoff_locked = false`, and current Colombo time `< 16:00`.
 - **Failure Condition**: Attempting cancellation when `order.status === 'ASSIGNED'` $\implies$ `400 Bad Request` ("Cannot cancel an order currently locked in dispatch planning").
 - **Database Enforcement**: State machine transition validation.
 - **Application Enforcement**: `OrdersService.cancelOrder`.

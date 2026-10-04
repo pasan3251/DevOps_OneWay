@@ -2,259 +2,236 @@
 
 import { useState } from "react";
 import {
-  CheckCircle,
+  AlertTriangle,
+  ArrowRight,
   CheckCircle2,
+  Clock3,
+  PackageX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DiscrepancyRecord, DiscrepancyResolution } from "./loader-manifest";
 
-const RESOLUTION_LABELS: Record<DiscrepancyResolution, string> = {
-  pending: "Pending",
-  ship_partial: "Ship partial",
-  hold_replacement: "Hold for replacement",
-  emergency_defer: "Deferred",
+const TYPE_LABELS: Record<DiscrepancyRecord["type"], string> = {
+  missing: "Missing inventory",
+  damaged: "Damaged packaging",
+  temperature_breach: "Temperature breach",
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  missing: "Missing",
-  damaged: "Damaged",
-  temperature_breach: "Temp. breach",
+const RESOLUTION_COPY: Record<
+  DiscrepancyResolution,
+  { label: string; instruction: string; blocking: boolean }
+> = {
+  pending: {
+    label: "Waiting on Dispatch",
+    instruction: "Keep this trip on hold. Dispatch must choose whether to ship partial, replace stock, or defer the order.",
+    blocking: true,
+  },
+  ship_partial: {
+    label: "Ship partial",
+    instruction: "Proceed with the reduced manifest. Re-check the affected stop and the revised payload before clearance.",
+    blocking: false,
+  },
+  hold_replacement: {
+    label: "Hold for replacement",
+    instruction: "Do not clear the vehicle. Wait for replacement stock and a refreshed dispatch instruction.",
+    blocking: true,
+  },
+  emergency_defer: {
+    label: "Manifest update required",
+    instruction: "Do not clear the vehicle until the deferred stop is removed, the LIFO sequence is updated, and changed stops are re-verified.",
+    blocking: true,
+  },
 };
 
 export function LoaderDiscrepancies({
   discrepancies,
-  onResolve,
-  onUpdateResolution,
+  onOpenTrip,
 }: {
   discrepancies: DiscrepancyRecord[];
-  onResolve: (id: string) => void;
-  onUpdateResolution: (id: string, resolution: DiscrepancyResolution, notes: string) => void;
+  onOpenTrip: (tripId: string) => void;
 }) {
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterType, setFilterType] = useState<"all" | DiscrepancyRecord["type"]>("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "waiting" | "instruction">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = discrepancies.filter((d) => {
-    const matchesType = filterType === "all" || d.type === filterType;
+  const filtered = discrepancies.filter((record) => {
+    const matchesType = filterType === "all" || record.type === filterType;
     const matchesStatus =
       filterStatus === "all" ||
-      (filterStatus === "pending" && d.resolution === "pending") ||
-      (filterStatus === "resolved" && d.resolution !== "pending");
+      (filterStatus === "waiting" && record.resolution === "pending") ||
+      (filterStatus === "instruction" && record.resolution !== "pending");
     return matchesType && matchesStatus;
   });
 
   const selectedRecord =
-    discrepancies.find((d) => d.id === selectedId) || (filtered.length > 0 ? filtered[0] : null);
-
-  const pendingCount = discrepancies.filter((d) => d.resolution === "pending").length;
+    discrepancies.find((record) => record.id === selectedId) ?? filtered[0] ?? null;
+  const waitingCount = discrepancies.filter((record) => record.resolution === "pending").length;
+  const instructionCount = discrepancies.length - waitingCount;
+  const blockingCount = discrepancies.filter(
+    (record) => RESOLUTION_COPY[record.resolution].blocking
+  ).length;
 
   return (
-    <div className="space-y-5">
-      {/* Minimal stat row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="loader-page-stack">
+      <section className="loader-summary-strip" aria-label="Exception summary">
         {[
-          { label: "Total exceptions", value: discrepancies.length },
-          { label: "Pending decision", value: pendingCount, warn: pendingCount > 0 },
-          { label: "Ship partial", value: discrepancies.filter((d) => d.resolution === "ship_partial").length },
-          { label: "Hold / Deferred", value: discrepancies.filter((d) => d.resolution === "hold_replacement" || d.resolution === "emergency_defer").length },
-        ].map(({ label, value, warn }) => (
-          <div key={label} className="workspace-panel p-4">
-            <p className="text-xs text-muted-foreground mb-1">{label}</p>
-            <p className={`text-2xl font-bold tabular-nums ${warn ? "text-amber-600" : "text-foreground"}`}>
-              {value}
-            </p>
-          </div>
+          { label: "Exception records", value: discrepancies.length },
+          { label: "Waiting on Dispatch", value: waitingCount },
+          { label: "Instructions received", value: instructionCount },
+          { label: "Blocking departure", value: blockingCount },
+        ].map((item) => (
+          <article className="loader-stat-card" key={item.label}>
+            <span className="loader-stat-body">
+              <span className="loader-stat-label">{item.label}</span>
+              <strong className="loader-stat-value">{item.value}</strong>
+            </span>
+          </article>
         ))}
-      </div>
+      </section>
 
-      {/* Main panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* List */}
-        <div className="lg:col-span-7 workspace-panel">
-          <div className="workspace-panel-heading">
+      <section className="loader-exception-layout">
+        <div className="workspace-panel loader-exception-list">
+          <div className="workspace-panel-heading loader-exception-heading">
             <div>
-              <h2>Exception log</h2>
-              <span>Pre-departure staging issues.</span>
+              <h2>Exception history</h2>
+              <span>Loader reports and dispatcher instructions for this depot.</span>
             </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="dispatch-search text-xs py-1.5 px-2 rounded"
-              >
-                <option value="all">All types</option>
-                <option value="missing">Missing</option>
-                <option value="damaged">Damaged</option>
-                <option value="temperature_breach">Temp. breach</option>
-              </select>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="dispatch-search text-xs py-1.5 px-2 rounded"
-              >
-                <option value="all">All statuses</option>
-                <option value="pending">Pending</option>
-                <option value="resolved">Resolved</option>
-              </select>
+            <div className="loader-filter-row">
+              <label>
+                <span className="sr-only">Filter by exception type</span>
+                <select
+                  value={filterType}
+                  onChange={(event) =>
+                    setFilterType(event.target.value as "all" | DiscrepancyRecord["type"])
+                  }
+                >
+                  <option value="all">All issue types</option>
+                  <option value="missing">Missing inventory</option>
+                  <option value="damaged">Damaged packaging</option>
+                  <option value="temperature_breach">Temperature breach</option>
+                </select>
+              </label>
+              <label>
+                <span className="sr-only">Filter by instruction status</span>
+                <select
+                  value={filterStatus}
+                  onChange={(event) =>
+                    setFilterStatus(event.target.value as "all" | "waiting" | "instruction")
+                  }
+                >
+                  <option value="all">All instruction states</option>
+                  <option value="waiting">Waiting on Dispatch</option>
+                  <option value="instruction">Instruction received</option>
+                </select>
+              </label>
             </div>
           </div>
 
           {filtered.length === 0 ? (
-            <div className="p-16 text-center">
-              <CheckCircle size={32} className="mx-auto text-emerald-500 mb-3 opacity-70" />
-              <p className="text-sm font-medium text-foreground">No exceptions found</p>
-              <p className="text-xs text-muted-foreground mt-1">No records match the selected filters.</p>
+            <div className="loader-empty-state">
+              <CheckCircle2 size={30} aria-hidden="true" />
+              <strong>No exception records</strong>
+              <span>No reports match the selected filters.</span>
             </div>
           ) : (
-            <div className="divide-y divide-border">
-              {filtered.map((item) => {
-                const isSelected = selectedRecord?.id === item.id;
+            <div className="loader-exception-rows">
+              {filtered.map((record) => {
+                const selected = selectedRecord?.id === record.id;
+                const resolution = RESOLUTION_COPY[record.resolution];
                 return (
-                  <div
-                    key={item.id}
-                    onClick={() => setSelectedId(item.id)}
-                    className={`px-5 py-3.5 cursor-pointer transition ${
-                      isSelected ? "bg-secondary/60 border-l-4 border-l-primary" : "hover:bg-muted/20"
-                    }`}
+                  <button
+                    type="button"
+                    key={record.id}
+                    aria-pressed={selected}
+                    className="loader-exception-row"
+                    onClick={() => setSelectedId(record.id)}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                          item.type === "missing"
-                            ? "bg-amber-100 text-amber-800"
-                            : item.type === "damaged"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-blue-100 text-blue-800"
-                        }`}>
-                          {TYPE_LABELS[item.type]}
-                        </span>
-                        <span className="text-sm font-semibold text-foreground">{item.outlet}</span>
-                      </div>
-                      <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                        item.resolution === "pending"
-                          ? "bg-amber-100 text-amber-800 border border-amber-200"
-                          : item.resolution === "ship_partial"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-muted text-muted-foreground"
-                      }`}>
-                        {RESOLUTION_LABELS[item.resolution]}
+                    <span className="loader-exception-row-top">
+                      <span>
+                        <b>{TYPE_LABELS[record.type]}</b>
+                        <small>{record.id}</small>
                       </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {item.quantity}× {item.itemDescription} · Impact: -{item.kgImpact} kg / -{item.m3Impact} m³ · {item.tripId}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      Logged {item.timestamp} · {item.reportedBy}
-                    </div>
-                  </div>
+                      <em data-blocking={resolution.blocking}>{resolution.label}</em>
+                    </span>
+                    <strong>{record.outlet}</strong>
+                    <span>{record.quantity} × {record.itemDescription}</span>
+                    <small>{record.tripId} · {record.vehicleId} · Logged {record.timestamp}</small>
+                  </button>
                 );
               })}
             </div>
           )}
         </div>
 
-        {/* Inspector */}
-        <div className="lg:col-span-5 workspace-panel">
+        <aside className="workspace-panel loader-exception-detail" aria-label="Selected exception">
           <div className="workspace-panel-heading">
-            <h2>Resolution</h2>
-            {selectedRecord && <span className="text-xs text-muted-foreground">{selectedRecord.id}</span>}
+            <div>
+              <h2>Dispatch instruction</h2>
+              <span>{selectedRecord?.id ?? "Select a record"}</span>
+            </div>
           </div>
 
           {selectedRecord ? (
-            <div className="p-5 space-y-5">
-              {/* Summary */}
-              <div className="p-3.5 bg-muted/40 rounded-lg border text-xs space-y-2">
-                {[
-                  ["Outlet", selectedRecord.outlet],
-                  ["Order / Trip", `${selectedRecord.orderId} · ${selectedRecord.tripId} (${selectedRecord.vehicleId})`],
-                  ["Type", TYPE_LABELS[selectedRecord.type]],
-                  ["Items", `${selectedRecord.quantity}× ${selectedRecord.itemDescription}`],
-                  ["Payload impact", `-${selectedRecord.kgImpact} kg / -${selectedRecord.m3Impact} m³`],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-3">
-                    <span className="text-muted-foreground shrink-0">{label}</span>
-                    <span className="text-right font-medium">{value}</span>
-                  </div>
-                ))}
-                {selectedRecord.notes && (
-                  <div className="pt-2 border-t border-border">
-                    <span className="text-muted-foreground block mb-0.5">Notes</span>
-                    <p className="italic">"{selectedRecord.notes}"</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Resolution options */}
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Resolution
-                </p>
-                <div className="space-y-2">
-                  {(
-                    [
-                      {
-                        key: "ship_partial" as DiscrepancyResolution,
-                        title: "Ship partial",
-                        desc: "Adjust manifest with short quantity. Vehicle departs with reduced load.",
-                      },
-                      {
-                        key: "hold_replacement" as DiscrepancyResolution,
-                        title: "Hold for replacement",
-                        desc: "Delay departure while replacement stock is retrieved from warehouse.",
-                      },
-                      {
-                        key: "emergency_defer" as DiscrepancyResolution,
-                        title: "Defer order",
-                        desc: "Remove this stop from the trip. Remaining stops are re-sequenced.",
-                      },
-                    ] as const
-                  ).map(({ key, title, desc }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`w-full text-left p-3 rounded-lg border text-xs transition flex items-start justify-between gap-2 ${
-                        selectedRecord.resolution === key
-                          ? "bg-secondary border-primary/50"
-                          : "hover:bg-muted/30"
-                      }`}
-                      onClick={() =>
-                        onUpdateResolution(selectedRecord.id, key, `${title} — authorized by planning desk.`)
-                      }
-                    >
-                      <div>
-                        <div className="font-semibold text-foreground mb-0.5">{title}</div>
-                        <div className="text-muted-foreground">{desc}</div>
-                      </div>
-                      {selectedRecord.resolution === key && (
-                        <CheckCircle2 size={16} className="text-primary flex-shrink-0 mt-0.5" />
-                      )}
-                    </button>
-                  ))}
+            <div className="loader-exception-detail-body">
+              <div className="loader-exception-title">
+                <span className="loader-status-icon" aria-hidden="true">
+                  {selectedRecord.resolution === "pending" ? <Clock3 size={20} /> : <PackageX size={20} />}
+                </span>
+                <div>
+                  <span className="loader-eyebrow">{TYPE_LABELS[selectedRecord.type]}</span>
+                  <h3>{selectedRecord.outlet}</h3>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-border flex items-center justify-between">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs text-destructive"
-                  onClick={() => onResolve(selectedRecord.id)}
-                >
-                  Dismiss record
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {RESOLUTION_LABELS[selectedRecord.resolution]}
+              <dl className="loader-detail-list">
+                <div><dt>Order / trip</dt><dd>{selectedRecord.orderId} · {selectedRecord.tripId}</dd></div>
+                <div><dt>Vehicle</dt><dd>{selectedRecord.vehicleId}</dd></div>
+                <div><dt>Quantity</dt><dd>{selectedRecord.quantity} × {selectedRecord.itemDescription}</dd></div>
+                <div><dt>Payload change</dt><dd>−{selectedRecord.kgImpact} kg · −{selectedRecord.m3Impact} m³</dd></div>
+                <div><dt>Reported by</dt><dd>{selectedRecord.reportedBy}</dd></div>
+              </dl>
+
+              {selectedRecord.notes && (
+                <div className="loader-note">
+                  <span>Loader note</span>
+                  <p>{selectedRecord.notes}</p>
+                </div>
+              )}
+
+              <div
+                className="loader-dispatch-instruction"
+                data-blocking={RESOLUTION_COPY[selectedRecord.resolution].blocking}
+              >
+                <span>
+                  {RESOLUTION_COPY[selectedRecord.resolution].blocking ? (
+                    <AlertTriangle size={17} aria-hidden="true" />
+                  ) : (
+                    <CheckCircle2 size={17} aria-hidden="true" />
+                  )}
+                  {RESOLUTION_COPY[selectedRecord.resolution].label}
                 </span>
+                <p>{selectedRecord.resolutionNotes || RESOLUTION_COPY[selectedRecord.resolution].instruction}</p>
+                {selectedRecord.resolvedAt && <small>Instruction received at {selectedRecord.resolvedAt}</small>}
               </div>
+
+              <p className="loader-role-note">
+                Only Dispatch can choose the resolution. The loader reports the physical issue, follows the instruction, and re-verifies the affected stop.
+              </p>
+
+              <Button onClick={() => onOpenTrip(selectedRecord.tripId)}>
+                Open loading checklist
+                <ArrowRight size={15} aria-hidden="true" />
+              </Button>
             </div>
           ) : (
-            <div className="p-12 text-center text-xs text-muted-foreground">
-              Select an exception to view details and choose a resolution.
+            <div className="loader-empty-state">
+              <PackageX size={30} aria-hidden="true" />
+              <strong>Select an exception</strong>
+              <span>The corresponding dispatch instruction will appear here.</span>
             </div>
           )}
-        </div>
-      </div>
+        </aside>
+      </section>
     </div>
   );
 }

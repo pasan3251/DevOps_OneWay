@@ -44,11 +44,22 @@ export interface StoreOrder {
   tempRequirement: 'ambient' | 'chilled';
   orderDate: string;
   submissionTime: string;
-  status: 'ORDER_RECORDED' | 'QUEUED_NEXT_RUN' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+  status:
+    | 'ORDER_RECORDED'
+    | 'QUEUED_NEXT_RUN'
+    | 'DISPATCH_PENDING'
+    | 'ASSIGNED'
+    | 'IN_TRANSIT'
+    | 'DELIVERED'
+    | 'DEFICIT_PENDING'
+    | 'CANCELLED';
   totalWeightKg: string;
   totalVolumeM3: string;
   totalItemsCount: number;
   isCutoffLocked: boolean;
+  deferredCount?: number;
+  lastDeferredDate?: string | null;
+  deferralReason?: string | null;
   items: OrderItemLine[];
 }
 
@@ -68,7 +79,7 @@ export interface DiscrepancyClaimData {
   claimNumber: string;
   orderId: string;
   discrepancyType: 'DAMAGE_IN_TRANSIT' | 'STORE_SHORTFALL' | 'REJECTED_TEMPERATURE';
-  status: 'LOGGED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+  status: 'LOGGED' | 'INVESTIGATING' | 'DEFICIT_ORDER_CREATED' | 'CREDITED' | 'REJECTED';
   shortfallQty: number;
   notes?: string;
   createdAt: string;
@@ -98,6 +109,9 @@ export interface StoreDeliveryCard {
   totalWeightKg: string;
   proofOfDelivery?: ProofOfDeliveryData | null;
   discrepancies?: DiscrepancyClaimData[];
+  etaNotice?: string;
+  manifestNotice?: string;
+  etaState?: 'on_time' | 'watch' | 'breach';
 }
 
 export interface StoreOverviewData {
@@ -110,6 +124,7 @@ export interface StoreOverviewData {
     assigned: number;
     inTransit: number;
     delivered: number;
+    deferred: number;
   };
   recentOrders: StoreOrder[];
   inboundDeliveries: StoreDeliveryCard[];
@@ -310,13 +325,89 @@ export const DEMO_CATALOG: ProductCatalogItem[] = [
   },
 ];
 
+const STORE_ORDERS_KEY = 'waypoint.demo.store.orders.v1';
+const STORE_DISCREPANCIES_KEY = 'waypoint.demo.store.discrepancies.v1';
+const API_TOKEN_KEY = 'waypoint.api.access-token.v1';
+
+type BackendOrderItem = {
+  productId: string;
+  quantityRequested: number;
+  unitWeightKg: string | number;
+  unitVolumeM3: string | number;
+  unitPrice: string | number;
+  product?: {
+    sku?: string;
+    name?: string;
+    category?: string;
+  };
+};
+
+type BackendOrder = Omit<StoreOrder, 'items'> & { items?: BackendOrderItem[] };
+
 class StoreManagerApiService {
   private activeOutlet: StoreProfile = DEMO_OUTLETS[0];
   private orders: StoreOrder[] = [];
   private discrepancies: DiscrepancyClaimData[] = [];
+  private hydrated = false;
+  private readonly apiBase = (process.env.NEXT_PUBLIC_API_URL || '/api/v1').replace(/\/$/, '');
 
   constructor() {
     this.seedInitialState();
+  }
+
+  private hydrateLocalState() {
+    if (this.hydrated || typeof window === 'undefined') return;
+    this.hydrated = true;
+    try {
+      const storedOrders = window.localStorage.getItem(STORE_ORDERS_KEY);
+      const storedDiscrepancies = window.localStorage.getItem(STORE_DISCREPANCIES_KEY);
+      if (storedOrders) this.orders = JSON.parse(storedOrders) as StoreOrder[];
+      if (storedDiscrepancies) {
+        this.discrepancies = JSON.parse(storedDiscrepancies) as DiscrepancyClaimData[];
+      }
+    } catch {
+      // Seeded data remains available when browser storage cannot be read.
+    }
+  }
+
+  private persistLocalState() {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(STORE_ORDERS_KEY, JSON.stringify(this.orders));
+      window.localStorage.setItem(STORE_DISCREPANCIES_KEY, JSON.stringify(this.discrepancies));
+    } catch {
+      // The current session remains usable even when persistence is unavailable.
+    }
+  }
+
+  private async apiRequest(path: string, init?: RequestInit): Promise<Response | null> {
+    try {
+      const token = typeof window === 'undefined' ? null : window.localStorage.getItem(API_TOKEN_KEY);
+      const headers = new Headers(init?.headers);
+      if (!headers.has('Content-Type') && init?.body) headers.set('Content-Type', 'application/json');
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      const response = await fetch(`${this.apiBase}${path}`, { ...init, headers });
+      if ([401, 403, 404, 502, 503].includes(response.status)) return null;
+      return response;
+    } catch {
+      return null;
+    }
+  }
+
+  private mapOrder(order: BackendOrder): StoreOrder {
+    return {
+      ...order,
+      items: (order.items || []).map((item) => ({
+        productId: item.productId,
+        productCode: item.product?.sku || item.productId,
+        productName: item.product?.name || 'Product',
+        category: item.product?.category || 'General',
+        quantityRequested: item.quantityRequested,
+        unitWeightKg: Number(item.unitWeightKg),
+        unitVolumeM3: Number(item.unitVolumeM3),
+        unitPrice: Number(item.unitPrice),
+      })),
+    };
   }
 
   private seedInitialState() {
@@ -420,6 +511,35 @@ class StoreManagerApiService {
           },
         ],
       },
+      {
+        id: 'ord-fresh-ch-deferred',
+        orderNumber: 'ORD-20261004-FR-1012',
+        outletId: this.activeOutlet.id,
+        brand: 'Fresh',
+        tempRequirement: 'chilled',
+        orderDate: '2026-10-04',
+        submissionTime: new Date(Date.now() - 3600000 * 28).toISOString(),
+        status: 'DEFICIT_PENDING',
+        totalWeightKg: '210.00',
+        totalVolumeM3: '0.82',
+        totalItemsCount: 22,
+        isCutoffLocked: true,
+        deferredCount: 1,
+        lastDeferredDate: '2026-10-03',
+        deferralReason: 'NO_REEFER_AVAILABLE',
+        items: [
+          {
+            productId: 'p-fr-ch-01',
+            productCode: 'FR-DAI-001',
+            productName: 'Highland Fresh Whole Milk (1L Pack)',
+            category: 'Dairy & Cold Chain',
+            quantityRequested: 22,
+            unitWeightKg: 1.05,
+            unitVolumeM3: 0.0012,
+            unitPrice: 520,
+          },
+        ],
+      },
     ];
 
     this.discrepancies = [
@@ -445,9 +565,14 @@ class StoreManagerApiService {
     const isPastCutoff = hour >= 16;
     const minutesToCutoff = isPastCutoff ? 0 : (15 - hour) * 60 + (60 - minute);
 
-    const d = new Date();
-    d.setDate(d.getDate() + (isPastCutoff ? 2 : 1));
-    const nextDeliveryDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const nextDelivery = new Date(
+      Date.UTC(
+        colomboDate.getUTCFullYear(),
+        colomboDate.getUTCMonth(),
+        colomboDate.getUTCDate() + (isPastCutoff ? 2 : 1),
+      ),
+    );
+    const nextDeliveryDate = nextDelivery.toISOString().slice(0, 10);
 
     return {
       cutoffTime: '16:00:00',
@@ -477,14 +602,15 @@ class StoreManagerApiService {
    * Fetch Store Overview (Aggregated)
    */
   public async getOverview(): Promise<StoreOverviewData> {
-    try {
-      const res = await fetch(`/api/v1/store/overview?outletId=${this.activeOutlet.id}`);
-      if (res.ok) {
-        const json = await res.json();
-        return json;
+    this.hydrateLocalState();
+    const response = await this.apiRequest(`/store/overview?outletId=${this.activeOutlet.id}`);
+    if (response?.ok) {
+      const overview = await response.json() as StoreOverviewData;
+      const deliveryResponse = await this.apiRequest(`/store/deliveries?outletId=${this.activeOutlet.id}`);
+      if (deliveryResponse?.ok) {
+        overview.inboundDeliveries = await deliveryResponse.json() as StoreDeliveryCard[];
       }
-    } catch {
-      // Graceful fallback to resilient client state
+      return overview;
     }
 
     const cutoff = this.getColomboCutoff();
@@ -495,6 +621,7 @@ class StoreManagerApiService {
       assigned: this.orders.filter((o) => o.status === 'ASSIGNED').length,
       inTransit: this.orders.filter((o) => o.status === 'IN_TRANSIT').length,
       delivered: this.orders.filter((o) => o.status === 'DELIVERED').length,
+      deferred: this.orders.filter((o) => o.status === 'DEFICIT_PENDING').length,
     };
 
     // Inbound deliveries with Fresh split delivery support (ALT-1)
@@ -521,6 +648,9 @@ class StoreManagerApiService {
         totalItemsCount: 48,
         totalWeightKg: '380.50',
         proofOfDelivery: null,
+        etaState: 'watch',
+        etaNotice: 'ETA moved by 20 minutes but remains inside the receiving window.',
+        manifestNotice: 'Loader reported a reduced chilled manifest. Review expected quantities at handover.',
       },
       {
         tripStopId: 'stop-ambient-02',
@@ -570,14 +700,11 @@ class StoreManagerApiService {
    * List all orders for the active outlet
    */
   public async getOrders(): Promise<StoreOrder[]> {
-    try {
-      const res = await fetch(`/api/v1/orders?outletId=${this.activeOutlet.id}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data && Array.isArray(json.data)) return json.data;
-      }
-    } catch {
-      // Fallback to local store state
+    this.hydrateLocalState();
+    const response = await this.apiRequest(`/orders?outletId=${this.activeOutlet.id}`);
+    if (response?.ok) {
+      const json = await response.json() as { data?: BackendOrder[] };
+      if (Array.isArray(json.data)) return json.data.map((order) => this.mapOrder(order));
     }
     return [...this.orders];
   }
@@ -590,7 +717,15 @@ class StoreManagerApiService {
     orderDate: string;
     items: { productId: string; quantity: number }[];
   }): Promise<StoreOrder> {
+    this.hydrateLocalState();
     const cutoff = this.getColomboCutoff();
+
+    if (params.orderDate < cutoff.nextDeliveryDate) {
+      throw new Error(`The earliest eligible delivery date is ${cutoff.nextDeliveryDate} for the current order cycle.`);
+    }
+    if (this.activeOutlet.brand !== 'Fresh' && params.tempRequirement !== 'ambient') {
+      throw new Error(`${this.activeOutlet.brand} outlets can only submit ambient orders.`);
+    }
 
     // Check Fresh dual-order invariant (SM-ORD-002)
     const existing = this.orders.find(
@@ -607,10 +742,8 @@ class StoreManagerApiService {
     }
 
     // Try backend API first
-    try {
-      const res = await fetch('/api/v1/orders', {
+    const response = await this.apiRequest('/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           outletId: this.activeOutlet.id,
           brand: this.activeOutlet.brand,
@@ -620,19 +753,15 @@ class StoreManagerApiService {
         }),
       });
 
-      if (res.ok) {
-        const created = await res.json();
-        this.orders.unshift(created);
-        return created;
-      } else {
-        const errJson = await res.json();
-        throw new Error(errJson.message || 'Server rejected order submission');
-      }
-    } catch (err: any) {
-      if (err.message && err.message.includes('Dual-order invariant')) {
-        throw err;
-      }
-      // Offline fallback: construct order locally
+    if (response?.ok) {
+      const created = this.mapOrder(await response.json() as BackendOrder);
+      this.orders.unshift(created);
+      this.persistLocalState();
+      return created;
+    }
+    if (response && !response.ok) {
+      const errorBody = await response.json().catch(() => null) as { message?: string } | null;
+      throw new Error(errorBody?.message || 'Server rejected order submission');
     }
 
     // Assemble locally
@@ -681,6 +810,7 @@ class StoreManagerApiService {
     };
 
     this.orders.unshift(newOrder);
+    this.persistLocalState();
     return newOrder;
   }
 
@@ -688,14 +818,22 @@ class StoreManagerApiService {
    * Cancel an unassigned order before 16:00 cutoff (SM-ORD-005)
    */
   public async cancelOrder(orderId: string): Promise<StoreOrder> {
+    this.hydrateLocalState();
     const order = this.orders.find((o) => o.id === orderId);
     if (!order) throw new Error('Order not found');
 
-    if (order.status !== 'ORDER_RECORDED' && order.status !== 'QUEUED_NEXT_RUN') {
-      throw new Error(`Order cannot be cancelled in state '${order.status}'. Dispatch has already locked the order for route execution.`);
+    if (order.status !== 'ORDER_RECORDED' || order.isCutoffLocked || this.getColomboCutoff().isPastCutoff) {
+      throw new Error('This order is locked. Only a recorded order in the current pre-cutoff cycle can be cancelled.');
+    }
+
+    const response = await this.apiRequest(`/orders/${orderId}/cancel`, { method: 'POST' });
+    if (response && !response.ok) {
+      const errorBody = await response.json().catch(() => null) as { message?: string } | null;
+      throw new Error(errorBody?.message || 'Order cancellation was rejected');
     }
 
     order.status = 'CANCELLED';
+    this.persistLocalState();
     return order;
   }
 
@@ -704,10 +842,26 @@ class StoreManagerApiService {
    */
   public async submitDiscrepancy(params: {
     orderId: string;
+    tripStopId?: string;
     discrepancyType: 'DAMAGE_IN_TRANSIT' | 'STORE_SHORTFALL' | 'REJECTED_TEMPERATURE';
     shortfallQty: number;
     notes?: string;
   }): Promise<DiscrepancyClaimData> {
+    this.hydrateLocalState();
+    const response = await this.apiRequest('/store/discrepancies', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    if (response?.ok) {
+      const claim = await response.json() as DiscrepancyClaimData;
+      this.discrepancies.unshift(claim);
+      this.persistLocalState();
+      return claim;
+    }
+    if (response && !response.ok) {
+      const errorBody = await response.json().catch(() => null) as { message?: string } | null;
+      throw new Error(errorBody?.message || 'Discrepancy claim was rejected');
+    }
     const dateCode = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const randSuffix = Math.floor(1000 + Math.random() * 9000);
     const claimNumber = `CLM-${dateCode}-${randSuffix}`;
@@ -724,6 +878,7 @@ class StoreManagerApiService {
     };
 
     this.discrepancies.unshift(newClaim);
+    this.persistLocalState();
     return newClaim;
   }
 

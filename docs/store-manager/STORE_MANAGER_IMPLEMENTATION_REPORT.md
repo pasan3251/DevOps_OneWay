@@ -63,7 +63,7 @@ graph TD
 | **`SM-ORD-001`** | **16:00 Colombo Cutoff** | Orders submitted $<16:00$ Colombo time are classified as `ORDER_RECORDED` for next-day dispatch ($T+1$). Orders submitted $\ge 16:00$ are locked into `QUEUED_NEXT_RUN` ($T+2$). |
 | **`SM-ORD-002`** | **Fresh Dual-Order Invariant** | Fresh supermarkets can submit at most 1 ambient and 1 chilled order per delivery date (`UNIQUE(outlet_id, order_date, temp_requirement)`). Style and Tech are locked to ambient. |
 | **`SM-ORD-003`** | **Brand SKU Isolation** | Products belonging to other brands cannot be ordered. Enforced at DTO validation and database foreign keys. |
-| **`SM-ORD-005`** | **Pre-Cutoff Cancellation** | Store Managers can cancel orders only while in `ORDER_RECORDED` or `QUEUED_NEXT_RUN`. Cancellation is prohibited once assigned to a vehicle manifest or dispatched. |
+| **`SM-ORD-005`** | **Pre-Cutoff Cancellation** | Store Managers can cancel only an unlocked `ORDER_RECORDED` order before the live 16:00 Colombo cutoff. `QUEUED_NEXT_RUN` and all later states are locked. |
 | **`ALT-1`** | **Split Delivery Visibility** | When Fresh ambient and chilled orders are split across separate vehicles due to reefer capacity constraints, Store Managers see dual delivery cards with distinct driver details, vehicle plates, and ETAs. |
 | **`SM-POD-001`** | **Electronic Receiving Handover** | Displays store receiver name, digital signature URL, delivery timestamp, and GPS dock geofence coordinates ($<50\text{m}$ radius). |
 | **`SM-DISC-001`** | **Receiving Discrepancy Claims** | Store Managers log claims (`DAMAGE_IN_TRANSIT`, `STORE_SHORTFALL`, `REJECTED_TEMPERATURE`) with shortfall quantities, generating unique claim numbers forwarded to the Dispatcher. |
@@ -76,7 +76,7 @@ graph TD
 Directory: `apps/web/src/features/store-manager/`
 
 1. **`store-manager-dashboard.tsx`**:
-   - Master layout with brand identity, active outlet selector dropdown, real-time sync button, and view navigation tabs (`Overview`, `New Order`, `Orders`, `Deliveries`).
+   - Master layout with a fixed assigned-outlet context, real-time sync, and three non-redundant destinations (`Today`, `Orders`, `Receiving`). `Create Order` is a guided drill-down from Orders rather than a duplicate navigation destination.
 2. **`overview-view.tsx`**:
    - Store Profile Header (Code, Brand, Address, Delivery Window `08:00 - 18:00`).
    - Cutoff Timer Card: Real-time countdown clock to 16:00 Colombo deadline with schedule notification.
