@@ -3,6 +3,7 @@ import { isRole } from "@/features/auth/accounts";
 import { RoleWorkspace } from "@/features/auth/role-workspace";
 import { DispatcherDashboard } from "@/features/dispatcher/dispatcher-dashboard";
 import { LoaderDashboard } from "@/features/loader/loader-dashboard";
+import { DriverApp } from "@/features/driver/driver-app";
 
 export default async function WorkspacePage({
   params,
@@ -13,6 +14,6 @@ export default async function WorkspacePage({
   if (!isRole(role)) notFound();
   if (role === "dispatcher") return <DispatcherDashboard />;
   if (role === "loader") return <LoaderDashboard />;
+  if (role === "driver") return <DriverApp />;
   return <RoleWorkspace role={role} />;
 }
-

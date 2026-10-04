@@ -1,0 +1,408 @@
+/* Waypoint Logistics — Driver Mobile Application Stylesheet */
+
+.driver-app-shell {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Constrained mobile container for desktop/tablet previews with realistic smartphone aspect */
+.driver-viewport-wrapper {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
+  position: relative;
+  padding-bottom: 74px; /* Space for bottom navigation */
+}
+
+/* Offline Degradation Banner (FAIL-C) */
+.driver-offline-banner {
+  background: #fff1d6;
+  color: #674100;
+  border-bottom: 1px solid #ffd879;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 40;
+}
+.dark .driver-offline-banner {
+  background: #3a2b0c;
+  color: #ffd879;
+  border-color: #574113;
+}
+.driver-offline-banner.is-outage {
+  background: #fff0e9;
+  color: #8e2900;
+  border-color: #ffad91;
+}
+.dark .driver-offline-banner.is-outage {
+  background: #3c1d14;
+  color: #ffad91;
+  border-color: #5c2c1f;
+}
+
+/* App Header */
+.driver-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.driver-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.driver-header-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Status Chips & Badges */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  line-height: 1.2;
+}
+.status-chip.scheduled {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.status-chip.en_route {
+  background: #e8f2f5;
+  color: #15576c;
+}
+.dark .status-chip.en_route {
+  background: #15313b;
+  color: #9dd8e4;
+}
+.status-chip.arrived {
+  background: #fff1d6;
+  color: #674100;
+}
+.dark .status-chip.arrived {
+  background: #3a2b0c;
+  color: #ffd879;
+}
+.status-chip.waiting_window {
+  background: #fff1d6;
+  color: #b86a00;
+  border: 1px solid #ffb703;
+}
+.dark .status-chip.waiting_window {
+  background: #3a2b0c;
+  color: #ffc247;
+  border-color: #b86a00;
+}
+.status-chip.delivered {
+  background: #e8f6f3;
+  color: #075e57;
+}
+.dark .status-chip.delivered {
+  background: #12332f;
+  color: #93e2d8;
+}
+.status-chip.partial {
+  background: #fff1d6;
+  color: #8e2900;
+}
+.dark .status-chip.partial {
+  background: #3a2b0c;
+  color: #ffd879;
+}
+.status-chip.exception {
+  background: #fff0e9;
+  color: #c93800;
+}
+.dark .status-chip.exception {
+  background: #3c1d14;
+  color: #ff7043;
+}
+
+/* Main Scrollable View Area */
+.driver-main-content {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+/* Card Foundations */
+.driver-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.driver-card-hero {
+  border-left: 4px solid var(--primary);
+  background: linear-gradient(180deg, var(--card) 0%, var(--muted) 180%);
+}
+
+/* Window Hold Banner & Countdown */
+.window-hold-box {
+  background: #fff1d6;
+  border: 1px solid #ffd879;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #674100;
+}
+.dark .window-hold-box {
+  background: #3a2b0c;
+  border-color: #574113;
+  color: #ffd879;
+}
+.window-hold-timer {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Sticky Bottom Action Bar */
+.driver-sticky-action-bar {
+  position: fixed;
+  bottom: 64px; /* Above bottom nav */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+  z-index: 25;
+  display: flex;
+  gap: 10px;
+}
+.dark .driver-sticky-action-bar {
+  background: rgba(15, 32, 39, 0.94);
+}
+
+.driver-cta-button {
+  height: 50px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Bottom Navigation Bar */
+.driver-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  height: 64px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  z-index: 30;
+}
+.driver-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  padding: 0;
+  position: relative;
+  transition: color 150ms ease;
+}
+.driver-nav-item.is-active {
+  color: var(--primary);
+  font-weight: 700;
+}
+.driver-nav-item.is-active::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 24px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--primary);
+}
+.driver-nav-badge {
+  position: absolute;
+  top: 8px;
+  right: calc(50% - 18px);
+  background: var(--destructive);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* Timeline Components */
+.stop-timeline-node {
+  position: relative;
+  padding-left: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stop-timeline-node::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 24px;
+  bottom: -16px;
+  width: 2px;
+  background: var(--border);
+}
+.stop-timeline-node:last-child::before {
+  display: none;
+}
+.stop-timeline-pin {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--muted);
+  border: 2px solid var(--border);
+  color: var(--muted-foreground);
+  z-index: 2;
+}
+.stop-timeline-node.is-completed .stop-timeline-pin {
+  background: #089b8c;
+  border-color: #089b8c;
+  color: #fff;
+}
+.stop-timeline-node.is-active .stop-timeline-pin {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(21, 87, 108, 0.2);
+}
+.stop-timeline-node.is-exception .stop-timeline-pin {
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: #fff;
+}
+
+/* Signature Pad Canvas */
+.signature-canvas-wrapper {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: #fff;
+  position: relative;
+  height: 160px;
+  touch-action: none;
+  cursor: crosshair;
+}
+.dark .signature-canvas-wrapper {
+  background: #0b1a20;
+  border-color: var(--border);
+}
+.signature-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Modals & Overlays */
+.driver-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  animation: fadeIn 180ms ease-out;
+}
+.driver-sheet-content {
+  background: var(--card);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  max-height: 90svh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px 24px;
+  gap: 16px;
+  animation: slideUp 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.driver-sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 999px;
+  margin: 0 auto 4px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
