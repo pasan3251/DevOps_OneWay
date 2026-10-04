@@ -1,0 +1,255 @@
+/* ==========================================================================
+   Waypoint Loader Workspace Styles (100% Theme & Font Match with Dispatcher)
+   ========================================================================== */
+
+/* Inherits Public Sans font, CSS variables (--brand-navy, --primary, etc.) from portal.css and globals.css */
+
+.loader-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.loader-stat-card {
+  background: var(--card, #ffffff);
+  border: 1px solid var(--border, #dce3eb);
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.loader-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.loader-stat-icon.blue {
+  background: var(--secondary, #eef4fa);
+  color: var(--primary, #1765ab);
+}
+
+.loader-stat-icon.green {
+  background: #eefaf3;
+  color: #1b8a53;
+}
+
+.loader-stat-icon.amber {
+  background: #fdf6ec;
+  color: #c47d1b;
+}
+
+.loader-stat-icon.red {
+  background: #fdf0f0;
+  color: #b42332;
+}
+
+.loader-stat-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.loader-stat-label {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--muted-foreground, #58677a);
+}
+
+.loader-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--foreground, #172b43);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.loader-stat-sub {
+  font-size: 11px;
+  color: var(--muted-foreground, #58677a);
+  margin-top: 2px;
+}
+
+/* Vehicle Queue Grid */
+.loader-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.loader-vehicle-card {
+  background: var(--card, #ffffff);
+  border: 1px solid var(--border, #dce3eb);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: all 0.15s ease-in-out;
+}
+
+.loader-vehicle-card:hover {
+  border-color: var(--primary, #1765ab);
+  box-shadow: 0 4px 12px rgba(23, 101, 171, 0.06);
+}
+
+.loader-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.loader-card-title {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--foreground, #172b43);
+}
+
+.loader-card-vehicle-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground, #58677a);
+  margin-top: 3px;
+}
+
+.loader-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.loader-badge.reefer {
+  background: #e6f2fc;
+  color: #125594;
+  border: 1px solid #cbe3f8;
+}
+
+.loader-badge.ambient {
+  background: var(--secondary, #eef4fa);
+  color: var(--secondary-foreground, #17446d);
+}
+
+.loader-badge.pending {
+  background: var(--muted, #f5f7fa);
+  color: var(--muted-foreground, #58677a);
+  border: 1px solid var(--border, #dce3eb);
+}
+
+.loader-badge.in-progress {
+  background: #eef6fc;
+  color: var(--primary, #1765ab);
+  border: 1px solid #cce4f7;
+}
+
+.loader-badge.cleared {
+  background: #eefaf3;
+  color: #1b8a53;
+  border: 1px solid #c9edd6;
+}
+
+.loader-badge.discrepancy {
+  background: #fdf0f0;
+  color: #b42332;
+  border: 1px solid #f9d3d6;
+}
+
+/* Metric Metrics inside Trip Card */
+.loader-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: var(--muted, #f5f7fa);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.loader-card-metric-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.loader-card-metric-label {
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--muted-foreground, #58677a);
+  text-transform: uppercase;
+}
+
+.loader-card-metric-value {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--foreground, #172b43);
+  margin-top: 2px;
+}
+
+/* LIFO Protocol Alert Strip */
+.loader-lifo-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fdf8eb;
+  border: 1px dashed #e8be6b;
+  color: #92580b;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+/* Checklist Rows */
+.loader-stop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border, #dce3eb);
+  transition: background 0.15s ease;
+}
+
+.loader-stop-row:hover {
+  background: var(--secondary, #eef4fa);
+}
+
+.loader-stop-row.checked {
+  background: #f4faf6;
+}
+
+.loader-stop-sequence {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 14px;
+}
+
+.loader-sequence-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--brand-navy, #122e4c);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.loader-sequence-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-foreground, #58677a);
+  margin-top: 3px;
+  text-transform: uppercase;
+}
