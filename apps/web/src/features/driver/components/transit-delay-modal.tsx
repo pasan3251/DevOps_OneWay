@@ -54,7 +54,7 @@ export function TransitDelayModal({
 
         <div className="flex items-center justify-between pb-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+            <div className="p-2 rounded-lg bg-muted text-foreground">
               <Clock size={20} />
             </div>
             <div>
@@ -76,8 +76,8 @@ export function TransitDelayModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
-            <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+          <div className="p-2.5 rounded-lg bg-muted border border-border text-foreground text-xs flex items-center gap-2">
+            <AlertTriangle size={15} className="shrink-0 text-muted-foreground" />
             <span>
               Vehicle must be safely stopped or parked curbside before logging delays.
             </span>
@@ -101,11 +101,11 @@ export function TransitDelayModal({
                     }}
                     className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
                       isSelected
-                        ? "bg-amber-50 dark:bg-amber-950/60 border-amber-600 text-amber-950 dark:text-amber-100 ring-1 ring-amber-600"
+                        ? "bg-secondary border-border text-foreground ring-1 ring-border"
                         : "bg-card border-border text-foreground hover:bg-muted"
                     }`}
                   >
-                    <div className="p-1.5 rounded-md bg-muted text-amber-700 dark:text-amber-300 shrink-0 mt-0.5">
+                    <div className="p-1.5 rounded-md bg-muted text-foreground shrink-0 mt-0.5">
                       <Icon size={16} />
                     </div>
                     <div>
@@ -167,7 +167,7 @@ export function TransitDelayModal({
             </Button>
             <Button
               type="submit"
-              className="flex-1 h-11 bg-amber-600 hover:bg-amber-700 text-white font-semibold flex items-center justify-center gap-2"
+              className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2"
             >
               <Check size={16} />
               Broadcast Delay (+{delayMinutes}m)

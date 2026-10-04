@@ -97,7 +97,7 @@ export function DriverProfileView({
             <span className="text-[10px] text-muted-foreground block">
               Thermal Classification
             </span>
-            <span className="font-bold text-teal-700 dark:text-teal-400 flex items-center gap-1">
+            <span className="font-bold text-foreground flex items-center gap-1">
               <Thermometer size={12} />
               Refrigerated Reefer
             </span>
@@ -145,7 +145,7 @@ export function DriverProfileView({
         <div className="mt-3 pt-3 border-t border-border">
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="text-muted-foreground flex items-center gap-1">
-              <Fuel size={13} className="text-amber-600" />
+              <Fuel size={13} className="text-muted-foreground" />
               Weekly Fuel Quota Allowance
             </span>
             <span className="font-mono font-bold text-foreground">
@@ -154,9 +154,7 @@ export function DriverProfileView({
           </div>
           <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
             <div
-              className={`h-2 rounded-full ${
-                fuelPercent < 25 ? "bg-red-500" : "bg-amber-500"
-              }`}
+              className="h-2 rounded-full bg-primary"
               style={{ width: `${fuelPercent}%` }}
             />
           </div>
@@ -176,7 +174,7 @@ export function DriverProfileView({
         <div className="mt-3 p-3 rounded-lg border border-border bg-muted/40 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {effectiveOnline ? (
-              <Wifi size={18} className="text-teal-600" />
+              <Wifi size={18} className="text-foreground" />
             ) : (
               <WifiOff size={18} className="text-destructive animate-pulse" />
             )}
@@ -204,7 +202,7 @@ export function DriverProfileView({
       {/* Emergency Dispatch Desk Contact */}
       <div className="driver-card p-4">
         <h2 className="text-sm font-bold text-foreground mb-2 flex items-center gap-1.5">
-          <PhoneCall size={16} className="text-teal-600" />
+          <PhoneCall size={16} className="text-primary" />
           Dispatch Hotline
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
@@ -215,7 +213,7 @@ export function DriverProfileView({
           href="tel:+94112489000"
           className="w-full py-2.5 px-3 rounded-lg bg-card border border-border hover:bg-muted text-xs font-bold flex items-center justify-center gap-2 text-foreground transition-colors"
         >
-          <PhoneCall size={14} className="text-teal-600" />
+          <PhoneCall size={14} className="text-primary" />
           <span>Call Peliyagoda Planning Desk (+94 11 248 9000)</span>
         </a>
       </div>

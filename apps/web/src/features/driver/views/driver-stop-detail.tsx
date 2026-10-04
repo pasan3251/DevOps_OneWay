@@ -89,7 +89,7 @@ export function DriverStopDetail({
             href={`tel:${stop.contact.phone}`}
             className="flex-1 py-2 px-3 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold flex items-center justify-center gap-2 text-foreground transition-colors"
           >
-            <Phone size={14} className="text-teal-600" />
+            <Phone size={14} className="text-primary" />
             <span>Call {stop.contact.name}</span>
           </a>
 
@@ -130,7 +130,7 @@ export function DriverStopDetail({
           <Button
             size="sm"
             onClick={() => onUnlockHold(stop.id)}
-            className="mt-1 bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold"
+            className="mt-1 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
           >
             Receiving Staff Ready · Unlock Handover
           </Button>
@@ -139,7 +139,7 @@ export function DriverStopDetail({
         <div className="driver-card p-3">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
-              <Clock size={15} className="text-amber-600" />
+              <Clock size={15} className="text-muted-foreground" />
               <div>
                 <span className="font-bold text-foreground block">
                   Delivery Window
@@ -214,15 +214,13 @@ export function DriverStopDetail({
                 <div className="flex items-center gap-2">
                   <Package
                     size={16}
-                    className={
-                      order.chilled ? "text-teal-600" : "text-primary"
-                    }
+                    className="text-primary"
                   />
                   <div>
                     <div className="text-xs font-bold text-foreground flex items-center gap-2">
                       <span>{order.id}</span>
                       {order.chilled ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 font-semibold flex items-center gap-1">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-semibold flex items-center gap-1">
                           <Thermometer size={10} />
                           Chilled Reefer
                         </span>
@@ -290,8 +288,8 @@ export function DriverStopDetail({
 
       {/* Completed POD Summary if stop is delivered */}
       {isCompleted && stop.pod && (
-        <div className="driver-card bg-teal-50/60 dark:bg-teal-950/30 border-teal-300 dark:border-teal-800 p-4">
-          <div className="flex items-center gap-2 text-teal-800 dark:text-teal-300 font-bold text-xs mb-2">
+        <div className="driver-card bg-secondary/60 border-border p-4">
+          <div className="flex items-center gap-2 text-foreground font-bold text-xs mb-2">
             <CheckCircle2 size={16} />
             Proof of Delivery Captured ({stop.pod.outcome.toUpperCase()})
           </div>
@@ -322,11 +320,11 @@ export function DriverStopDetail({
           </div>
 
           {stop.pod.signatureDataUrl && (
-            <div className="mt-3 pt-2 border-t border-teal-200 dark:border-teal-900">
+            <div className="mt-3 pt-2 border-t border-border">
               <span className="text-[10px] text-muted-foreground block mb-1">
                 Recipient Signature
               </span>
-              <div className="h-16 w-48 bg-white dark:bg-slate-900 border rounded p-1">
+              <div className="h-16 w-48 bg-card border rounded p-1">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={stop.pod.signatureDataUrl}
@@ -341,7 +339,7 @@ export function DriverStopDetail({
 
       {/* Exception Notice if stop failed */}
       {isException && stop.exception && (
-        <div className="driver-card bg-red-50/60 dark:bg-red-950/30 border-red-300 dark:border-red-800 p-4">
+        <div className="driver-card bg-secondary/60 border-border p-4">
           <div className="flex items-center gap-2 text-destructive font-bold text-xs mb-1">
             <AlertTriangle size={16} />
             Exception Logged: {stop.exception.reasonLabel}
@@ -380,7 +378,7 @@ export function DriverStopDetail({
         ) : isEarlyHold ? (
           <Button
             onClick={() => onUnlockHold(stop.id)}
-            className="flex-1 h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm flex items-center justify-center gap-2"
+            className="flex-1 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-2"
           >
             <Clock size={18} />
             <span>Window Open · Begin Handover</span>
@@ -388,7 +386,7 @@ export function DriverStopDetail({
         ) : stop.status === "arrived" || stop.status === "unloading" ? (
           <Button
             onClick={() => onOpenPod(stop)}
-            className="flex-1 h-12 bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm flex items-center justify-center gap-2"
+            className="flex-1 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-2"
           >
             <CheckCircle2 size={18} />
             <span>Record POD & Complete Stop</span>

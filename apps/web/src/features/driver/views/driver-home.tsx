@@ -74,23 +74,23 @@ export function DriverHome({
 
       {/* Pre-Trip Checklist Warning Banner if not yet verified */}
       {!route.preTripCompleted && (
-        <div className="driver-card bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 p-3">
+        <div className="driver-card bg-secondary/60 border-border p-3">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 shrink-0">
+            <div className="p-2 rounded-md bg-muted text-foreground shrink-0">
               <ShieldCheck size={18} />
             </div>
             <div className="flex-1">
-              <div className="text-xs font-bold text-amber-950 dark:text-amber-200">
+              <div className="text-xs font-bold text-foreground">
                 Pre-Departure Vehicle Check Required
               </div>
-              <div className="text-[11px] text-amber-900/80 dark:text-amber-300/80 mt-0.5">
+              <div className="text-[11px] text-muted-foreground mt-0.5">
                 Verify tire pressure, LIFO cargo seals, and reefer temperature before departing {route.depot}.
               </div>
             </div>
             <Button
               size="sm"
               onClick={onOpenPreTrip}
-              className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+              className="text-xs h-8 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
             >
               Verify
             </Button>
@@ -100,7 +100,7 @@ export function DriverHome({
 
       {/* Route Delay Notice if Active */}
       {route.transitDelayMinutes > 0 && route.delayNotice && (
-        <div className="driver-card bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 p-3">
+        <div className="driver-card bg-secondary/60 border-border p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertCircle size={16} className="text-destructive shrink-0" />
@@ -160,7 +160,7 @@ export function DriverHome({
             <span className="text-[10px] text-muted-foreground block">
               Reefer Temp
             </span>
-            <span className="text-xs font-bold font-mono text-teal-700 dark:text-teal-400 flex items-center justify-center gap-1">
+            <span className="text-xs font-bold font-mono text-foreground flex items-center justify-center gap-1">
               <Thermometer size={12} />
               {route.vehicle.reeferTemperatureC.toFixed(1)}°C
             </span>
@@ -209,7 +209,7 @@ export function DriverHome({
           {/* Delivery Window & Arrival Timing */}
           <div className="p-2.5 rounded-lg bg-card/80 border border-border flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
-              <Clock size={15} className="text-amber-600" />
+              <Clock size={15} className="text-muted-foreground" />
               <div>
                 <span className="font-semibold block text-foreground">
                   Delivery Window
@@ -236,7 +236,7 @@ export function DriverHome({
               <Package size={14} className="text-primary" />
               {activeStop.totalCartons} packages ({activeStop.totalKg} kg)
             </span>
-            <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+            <span className="text-[11px] font-semibold text-foreground">
               {activeStop.orders.length > 1
                 ? "Dual Order (Ambient + Chilled)"
                 : activeStop.dockType.replace("_", " ")}
@@ -276,8 +276,8 @@ export function DriverHome({
         </div>
       ) : allStopsCompleted ? (
         /* ALL STOPS COMPLETED HERO */
-        <div className="driver-card bg-teal-50/50 dark:bg-teal-950/30 border-teal-300 dark:border-teal-800 text-center p-6">
-          <div className="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 flex items-center justify-center mx-auto mb-3">
+        <div className="driver-card bg-secondary/60 border-border text-center p-6">
+          <div className="w-12 h-12 rounded-full bg-muted text-foreground flex items-center justify-center mx-auto mb-3">
             <CheckCircle2 size={28} />
           </div>
           <h2 className="text-lg font-bold text-foreground">
@@ -291,7 +291,7 @@ export function DriverHome({
           <Button
             onClick={onCompleteRoute}
             disabled={route.shiftStatus === "completed"}
-            className="w-full mt-4 h-12 bg-teal-700 hover:bg-teal-800 text-white font-bold text-sm"
+            className="w-full mt-4 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm"
           >
             {route.shiftStatus === "completed"
               ? "Route Closed & Recorded"
@@ -311,7 +311,7 @@ export function DriverHome({
             onClick={onOpenDelay}
             className="p-3 rounded-lg border border-border bg-card hover:bg-muted text-left transition-colors flex items-center gap-2.5"
           >
-            <div className="p-2 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+            <div className="p-2 rounded-md bg-muted text-foreground">
               <Clock size={16} />
             </div>
             <div>
@@ -329,7 +329,7 @@ export function DriverHome({
             onClick={onOpenPreTrip}
             className="p-3 rounded-lg border border-border bg-card hover:bg-muted text-left transition-colors flex items-center gap-2.5"
           >
-            <div className="p-2 rounded-md bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300">
+            <div className="p-2 rounded-md bg-muted text-foreground">
               <ShieldCheck size={16} />
             </div>
             <div>
@@ -357,7 +357,7 @@ export function DriverHome({
         ) : activeStop && !allStopsCompleted ? (
           <Button
             onClick={() => onOpenStop(activeStop.id)}
-            className="driver-cta-button bg-teal-700 hover:bg-teal-800 text-white"
+            className="driver-cta-button bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <MapPin size={18} />
             <span>
@@ -372,7 +372,7 @@ export function DriverHome({
           <Button
             onClick={onCompleteRoute}
             disabled={route.shiftStatus === "completed"}
-            className="driver-cta-button bg-teal-700 hover:bg-teal-800 text-white"
+            className="driver-cta-button bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <CheckCircle2 size={18} />
             <span>

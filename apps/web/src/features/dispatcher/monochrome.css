@@ -1,6 +1,10 @@
 .dispatch-app,
 .dispatch-dialog,
-.workspace-notification-panel {
+.workspace-notification-panel,
+.driver-app-shell,
+.driver-viewport-wrapper,
+.driver-sheet-content,
+.store-manager-app {
   --background: #ffffff;
   --foreground: #171717;
   --card: #ffffff;
@@ -26,13 +30,23 @@
 
 .dispatch-app,
 .dispatch-dialog,
-.workspace-notification-panel {
+.workspace-notification-panel,
+.driver-app-shell,
+.driver-viewport-wrapper,
+.driver-sheet-content,
+.store-manager-app {
   filter: grayscale(1);
 }
 
 .dispatch-app[data-theme="dark"],
 .dispatch-dialog[data-theme="dark"],
-.workspace-notification-panel[data-theme="dark"] {
+.workspace-notification-panel[data-theme="dark"],
+.driver-app-shell[data-theme="dark"],
+.dark .driver-app-shell,
+.dark .driver-viewport-wrapper,
+.dark .driver-sheet-content,
+.store-manager-app[data-theme="dark"],
+.dark .store-manager-app {
   --background: #111111;
   --foreground: #fafafa;
   --card: #171717;
