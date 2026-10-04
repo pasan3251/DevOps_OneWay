@@ -15,7 +15,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DEMO_DATE, formatTime, type Depot, type Plan } from "./planning";
+import {
+  DEMO_DATE,
+  formatTime,
+  orders,
+  validateTrip,
+  vehicles,
+  type Depot,
+  type Plan,
+} from "./planning";
 import {
   validDate,
   type CalendarEvent,
@@ -72,6 +80,22 @@ export function WorkspaceCalendar({
       time: formatTime(t.departure),
       kind: "Route",
     }));
+  const selectedOrders =
+    date === DEMO_DATE ? orders.filter((order) => order.depot === depot) : [];
+  const selectedTrips =
+    date === DEMO_DATE
+      ? plan.trips.filter((trip) => trip.depot === depot)
+      : [];
+  const assignedVehicles = new Set(selectedTrips.map((trip) => trip.vehicleId));
+  const availableVehicles = vehicles.filter(
+    (vehicle) =>
+      vehicle.depot === depot &&
+      !vehicle.workshop &&
+      !assignedVehicles.has(vehicle.id),
+  );
+  const blockingTrips = selectedTrips.filter(
+    (trip) => validateTrip(trip, plan).length > 0,
+  );
   const items = [...state.events, ...routes]
     .filter((e) => e.date.startsWith(month))
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
@@ -151,14 +175,41 @@ export function WorkspaceCalendar({
         </select>
       </div>
       <p className="workspace-note calendar-note">
-        Local planning notes and {depot} demo departures. Events are not sent to
-        other roles.
+        A planning calendar with the selected day’s demand and fleet position.
+        Forecast drivers will be connected when forecast data is available.
       </p>
+      <div className="capacity-outlook-summary" aria-label="Capacity outlook">
+        <div>
+          <span>Orders</span>
+          <strong>{selectedOrders.length}</strong>
+          <small>Selected operating day</small>
+        </div>
+        <div>
+          <span>Chilled orders</span>
+          <strong>{selectedOrders.filter((order) => order.chilled).length}</strong>
+          <small>Reefer demand</small>
+        </div>
+        <div>
+          <span>Vehicles assigned</span>
+          <strong>{assignedVehicles.size}</strong>
+          <small>{selectedTrips.length} draft trips</small>
+        </div>
+        <div>
+          <span>Vehicles available</span>
+          <strong>{availableVehicles.length}</strong>
+          <small>Excludes workshop and assigned</small>
+        </div>
+        <div>
+          <span>Constraint blockers</span>
+          <strong>{blockingTrips.length}</strong>
+          <small>Must resolve before publish</small>
+        </div>
+      </div>
       <div
         className="calendar-workspace-scroll"
         tabIndex={0}
         role="region"
-        aria-label="Scrollable calendar"
+        aria-label="Calendar grid"
       >
         {view === "Month" ? (
           <>

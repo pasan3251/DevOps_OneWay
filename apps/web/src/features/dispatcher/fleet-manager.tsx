@@ -24,7 +24,7 @@ import {
 } from "./planning";
 
 type Props = {
-  initialTab?: string;
+  fixedView?: "fleet" | "capacity";
   plan: Plan;
   depot: Depot;
   activeTrip?: Trip;
@@ -34,7 +34,7 @@ type Props = {
   onCreate: (vehicleId: string) => void;
 };
 export function FleetManager({
-  initialTab = "Current fleet",
+  fixedView,
   plan,
   depot,
   activeTrip,
@@ -43,7 +43,8 @@ export function FleetManager({
   onRoute,
   onCreate,
 }: Props) {
-  const [tab, setTab] = useState(initialTab);
+  const [tab, setTab] = useState<"fleet" | "capacity">("fleet");
+  const activeView = fixedView ?? tab;
   const [query, setQuery] = useState("");
   const [type, setType] = useState("All types");
   const [status, setStatus] = useState("All statuses");
@@ -54,15 +55,18 @@ export function FleetManager({
     (vehicle) => vehicleUsage(vehicle, plan).trips.length,
   );
   const workshop = fleet.filter((vehicle) => vehicle.workshop);
+  const available = fleet.filter(
+    (vehicle) => !vehicle.workshop && !vehicleUsage(vehicle, plan).trips.length,
+  );
   const filtered = fleet.filter(
     (vehicle) =>
       vehicle.id.toLowerCase().includes(query.toLowerCase()) &&
       (type === "All types" ||
         (type === "Refrigerated" ? vehicle.chilled : vehicle.type === type)) &&
       (status === "All statuses" ||
-        (status === "Workshop"
+        (status === "In workshop"
           ? vehicle.workshop
-          : status === "Allocated"
+          : status === "Assigned"
             ? !vehicle.workshop && vehicleUsage(vehicle, plan).trips.length > 0
             : !vehicle.workshop &&
               vehicleUsage(vehicle, plan).trips.length === 0)),
@@ -86,17 +90,22 @@ export function FleetManager({
       : [];
   return (
     <div className="fleet-workspace">
-      <div className="operations-tabs fleet-tabs" aria-label="Fleet views">
-        {["Current fleet", "Managed capacities"].map((value) => (
+      {!fixedView && (
+        <div className="operations-tabs fleet-tabs" aria-label="Fleet views">
           <button
-            key={value}
-            aria-pressed={tab === value}
-            onClick={() => setTab(value)}
+            aria-pressed={activeView === "fleet"}
+            onClick={() => setTab("fleet")}
           >
-            {value}
+            Current fleet
           </button>
-        ))}
-      </div>
+          <button
+            aria-pressed={activeView === "capacity"}
+            onClick={() => setTab("capacity")}
+          >
+            Allocation & capacity
+          </button>
+        </div>
+      )}
       <div
         className="fleet-workspace-scroll"
         tabIndex={0}
@@ -112,7 +121,7 @@ export function FleetManager({
           </div>
           <div>
             <span>Available to plan</span>
-            <strong>{fleet.length - workshop.length}</strong>
+            <strong>{available.length}</strong>
           </div>
           <div>
             <span>Refrigerated</span>
@@ -123,7 +132,7 @@ export function FleetManager({
             <strong>{workshop.length}</strong>
           </div>
         </div>
-        {tab === "Current fleet" ? (
+        {activeView === "fleet" ? (
           <div className="fleet-operating-layout">
             <section className="operations-panel">
               <div className="operations-panel-heading">
@@ -163,7 +172,7 @@ export function FleetManager({
                   value={status}
                   onChange={(event) => setStatus(event.target.value)}
                 >
-                  {["All statuses", "Unallocated", "Allocated", "Workshop"].map(
+                  {["All statuses", "Available", "Assigned", "In workshop"].map(
                     (value) => (
                       <option key={value}>{value}</option>
                     ),
@@ -199,10 +208,10 @@ export function FleetManager({
                           className={`operation-status ${vehicle.workshop ? "status-deferred" : item.trips.length ? "status-assigned" : "status-pending"}`}
                         >
                           {vehicle.workshop
-                            ? "Workshop"
+                            ? "In workshop"
                             : item.trips.length
-                              ? "Allocated"
-                              : "Unallocated"}
+                              ? "Assigned"
+                              : "Available"}
                         </span>
                       </div>
                       <div className="fleet-vehicle-metrics">
@@ -402,10 +411,10 @@ export function FleetManager({
           <section className="operations-panel capacity-panel">
             <div className="operations-panel-heading">
               <div>
-                <h2>Managed capacities</h2>
+                <h2>Vehicle allocation & capacity</h2>
                 <p>
-                  Capacity is checked per trip; fuel is shared across this
-                  vehicle’s planned day.
+                  Review each draft trip against weight, volume, time and
+                  shared daily fuel constraints before building its route.
                 </p>
               </div>
               <CheckCircle2 size={21} />
@@ -414,7 +423,7 @@ export function FleetManager({
               className="operations-table-scroll"
               tabIndex={0}
               role="region"
-              aria-label="Scrollable trip capacities"
+              aria-label="Trip capacity table"
             >
               <table className="operations-table capacity-table">
                 <caption className="sr-only">
@@ -538,17 +547,17 @@ export function FleetManager({
               title="Allocation"
               unit="vehicles"
               slices={[
-                { name: "Allocated", value: used.length, fill: "#1765ab" },
+                { name: "Assigned", value: used.length, fill: "#171717" },
                 {
-                  name: "Unallocated",
+                  name: "Available",
                   value: fleet.filter(
                     (vehicle) =>
                       !vehicle.workshop &&
                       !vehicleUsage(vehicle, plan).trips.length,
                   ).length,
-                  fill: "#7a8ea5",
+                  fill: "#a3a3a3",
                 },
-                { name: "Workshop", value: workshop.length, fill: "#af7429" },
+                { name: "In workshop", value: workshop.length, fill: "#737373" },
               ]}
             />
             <Donut
@@ -559,13 +568,13 @@ export function FleetManager({
                   name: "Trucks",
                   value: fleet.filter((vehicle) => vehicle.type === "Truck")
                     .length,
-                  fill: "#1765ab",
+                  fill: "#171717",
                 },
                 {
                   name: "Vans",
                   value: fleet.filter((vehicle) => vehicle.type === "Van")
                     .length,
-                  fill: "#247a70",
+                  fill: "#737373",
                 },
               ]}
             />

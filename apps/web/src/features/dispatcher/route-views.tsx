@@ -148,7 +148,7 @@ export function RouteViews({
             <div
               className="route-status-scroll"
               tabIndex={0}
-              aria-label="Scrollable route details"
+              aria-label="Route details"
             >
               {mode === "tracking" ? (
                 <>

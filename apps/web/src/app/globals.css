@@ -40,3 +40,45 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Neutral foundation for the prototype phase. Product colour will be applied
+ * later by changing these tokens rather than repainting individual screens.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #262626;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #ededed;
+  --accent-foreground: #171717;
+  --destructive: #404040;
+  --border: #e5e5e5;
+  --input: #a3a3a3;
+  --ring: #525252;
+  --brand-navy: #0a0a0a;
+  --brand-muted: #a3a3a3;
+}
+
+::selection {
+  background: #d4d4d4;
+  color: #0a0a0a;
+}
+
+:focus-visible {
+  outline-color: #525252;
+}
+
+.sign-in-page,
+.workspace-page,
+.help-dialog {
+  filter: grayscale(1);
+}

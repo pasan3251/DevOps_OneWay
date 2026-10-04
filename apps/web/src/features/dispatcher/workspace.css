@@ -361,6 +361,37 @@
   padding: 0 18px 14px;
   flex-shrink: 0;
 }
+
+.capacity-outlook-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.capacity-outlook-summary > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid var(--border);
+}
+.capacity-outlook-summary > div:last-child {
+  border-right: 0;
+}
+.capacity-outlook-summary span,
+.capacity-outlook-summary small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.capacity-outlook-summary strong {
+  display: block;
+  margin: 5px 0 3px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
 .calendar-workspace-scroll {
   overflow: auto;
   min-height: 0;
@@ -749,13 +780,12 @@
   border-radius: 6px;
   font-size: 13px;
 }
-.route-mode-tabs > button[aria-pressed="true"] {
+.route-mode-tabs > button[aria-pressed="true"],
+.route-mode-tabs > button[data-state="active"],
+.route-mode-tabs > button[data-active] {
   background: var(--secondary);
   color: var(--primary);
   font-weight: 600;
-}
-.route-mode-tabs > button:last-child {
-  margin-left: auto;
 }
 .route-view-workspace {
   flex: 1;
@@ -1033,6 +1063,7 @@
     grid-template-columns: minmax(0, 1fr) 320px;
   }
 }
+
 @media (max-width: 1000px) {
   .chat-workspace {
     grid-template-columns: 240px minmax(0, 1fr);
@@ -1062,6 +1093,18 @@
   }
 }
 @media (max-width: 760px) {
+  .capacity-outlook-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .capacity-outlook-summary > div {
+    border-bottom: 1px solid var(--border);
+  }
+  .capacity-outlook-summary > div:nth-child(2n) {
+    border-right: 0;
+  }
+  .capacity-outlook-summary > div:last-child {
+    border-bottom: 0;
+  }
   .dispatch-sidebar nav {
     display: flex;
     flex-wrap: nowrap;
@@ -1210,9 +1253,6 @@
     padding: 9px 8px;
     font-size: 12px;
   }
-  .route-mode-tabs > button:last-child {
-    margin-left: 0;
-  }
   .route-view-toolbar .dispatch-search {
     flex-basis: 100%;
     max-width: none;
@@ -1248,4 +1288,136 @@
   .workspace-form-row input {
     font-size: 16px;
   }
+}
+
+/*
+ * Dispatcher pages use one primary vertical scrollbar. Wide tables, the route
+ * strip, contact list and message history may still scroll within their own
+ * interaction surface, but page sections should not be trapped in short
+ * viewport-height panes.
+ */
+.dispatch-content-scrollable :is(
+    .fleet-workspace,
+    .route-planning-workspace,
+    .records-workspace,
+    .calendar-workspace,
+    .route-view-workspace
+  ) {
+  flex: none;
+  min-height: auto;
+  max-height: none;
+}
+
+.dispatch-content-scrollable .fleet-workspace-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-height: none;
+  padding-right: 0;
+  scrollbar-gutter: auto;
+}
+
+.dispatch-content-scrollable .dispatch-planning-grid {
+  flex: none;
+  min-height: auto;
+  align-items: start;
+  overflow: visible;
+}
+
+.dispatch-content-scrollable .route-planning-workspace :is(
+    .dispatch-backlog,
+    .dispatch-trip
+  ) {
+  min-height: auto;
+  max-height: none;
+  overflow: clip;
+  scrollbar-gutter: auto;
+}
+
+.dispatch-content-scrollable .records-split {
+  flex: none;
+  min-height: auto;
+  align-items: start;
+}
+
+.dispatch-content-scrollable :is(.records-list, .records-inspector) {
+  max-height: none;
+  overflow: visible;
+}
+
+.dispatch-content-scrollable :is(
+    .records-list .workspace-table-scroll,
+    .records-inspector-scroll
+  ) {
+  min-height: auto;
+  max-height: none;
+  flex: none;
+}
+
+.dispatch-content-scrollable .records-list .workspace-table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.dispatch-content-scrollable .directory-workspace,
+.dispatch-content-scrollable .directory-workspace.with-inspector {
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+  align-items: start;
+}
+
+.dispatch-content-scrollable :is(
+    .directory-analysis,
+    .directory-list,
+    .directory-inspector
+  ) {
+  max-height: none;
+  overflow: visible;
+}
+
+.dispatch-content-scrollable .directory-list .workspace-table-scroll {
+  flex: none;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.dispatch-content-scrollable .calendar-workspace {
+  overflow: visible;
+}
+
+.dispatch-content-scrollable .calendar-workspace-scroll {
+  min-height: auto;
+  max-height: none;
+  flex: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.dispatch-content-scrollable .route-view-grid {
+  flex: none;
+  min-height: 560px;
+  max-height: none;
+  overflow: visible;
+  align-items: stretch;
+}
+
+.dispatch-content-scrollable :is(
+    .route-status-workspace,
+    .route-status-scroll
+  ) {
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.dispatch-content-scrollable .route-map-workspace {
+  min-height: 560px;
+  max-height: none;
+}
+
+.dispatch-content-scrollable .chat-workspace {
+  flex: none;
+  min-height: clamp(620px, calc(100svh - 220px), 780px);
+  max-height: none;
 }

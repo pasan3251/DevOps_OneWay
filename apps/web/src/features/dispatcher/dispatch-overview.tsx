@@ -35,11 +35,11 @@ import {
 
 type Slice = { name: string; value: number; fill: string };
 const shades = {
-  blue: "#1765ab",
-  teal: "#247a70",
-  amber: "#af7429",
-  slate: "#7a8ea5",
-  purple: "#7561a8",
+  blue: "#171717",
+  teal: "#404040",
+  amber: "#737373",
+  slate: "#a3a3a3",
+  purple: "#525252",
 };
 
 export function Donut({
@@ -216,9 +216,14 @@ export function DispatchOverview({
       detail: "In this depot",
     },
     {
-      label: "Assigned",
+      label: "Awaiting decision",
+      value: String(pending.length),
+      detail: "Dispatcher action",
+    },
+    {
+      label: "Planned",
       value: String(assignedIds.size),
-      detail: "Planned, not delivered",
+      detail: "Approved and allocated",
     },
     {
       label: "Deferred",
@@ -228,12 +233,12 @@ export function DispatchOverview({
       detail: "Reason recorded",
     },
     {
-      label: "Vehicles used",
+      label: "Vehicles allocated",
       value: `${usedIds.size} / ${fleet.length}`,
       detail: "Sample fleet",
     },
     {
-      label: "Refrigerated used",
+      label: "Refrigerated allocated",
       value: `${fleet.filter((v) => v.chilled && usedIds.has(v.id)).length} / ${fleet.filter((v) => v.chilled).length}`,
       detail: "Sample cold-chain fleet",
     },
@@ -293,7 +298,7 @@ export function DispatchOverview({
       shades.teal,
       shades.blue,
       shades.purple,
-      "#9a5778",
+      "#262626",
       shades.slate,
       shades.amber,
     ][i],
@@ -316,10 +321,10 @@ export function DispatchOverview({
   }));
   const brandData = ["Fresh", "Style", "Tech"].map((brand) => ({
     brand,
-    Assigned: depotOrders.filter(
+    Planned: depotOrders.filter(
       (order) => order.brand === brand && assignedIds.has(order.id),
     ).length,
-    Pending: pending.filter((order) => order.brand === brand).length,
+    Awaiting: pending.filter((order) => order.brand === brand).length,
     Deferred: depotOrders.filter(
       (order) => order.brand === brand && deferred.has(order.id),
     ).length,
@@ -333,7 +338,7 @@ export function DispatchOverview({
         className="overview-scroll"
         tabIndex={0}
         role="region"
-        aria-label="Scrollable dashboard analysis"
+        aria-label="Dashboard analysis"
       >
         <div
           className={`overview-priority ${carryOver.length ? "has-priority" : ""}`}
@@ -343,7 +348,7 @@ export function DispatchOverview({
             <strong>
               {carryOver.length
                 ? `${carryOver.length} carry-over order${carryOver.length === 1 ? " needs" : "s need"} priority`
-                : "No carry-over orders awaiting allocation"}
+                : "No carry-over orders awaiting a decision"}
             </strong>
             <span>
               {pending.length} order{pending.length === 1 ? "" : "s"} still to
@@ -395,7 +400,7 @@ export function DispatchOverview({
                 className="dispatch-text-button"
                 onClick={() => onNavigate("fleet")}
               >
-                Manage fleet
+                Inspect fleet
                 <ChevronRight size={14} aria-hidden="true" />
               </button>
             </div>
@@ -418,12 +423,12 @@ export function DispatchOverview({
               title="Daily order allocation"
               slices={[
                 {
-                  name: "Assigned",
+                  name: "Planned",
                   value: assignedIds.size,
                   fill: shades.blue,
                 },
                 {
-                  name: "Awaiting allocation",
+                  name: "Awaiting decision",
                   value: pending.length,
                   fill: shades.slate,
                 },
@@ -469,13 +474,13 @@ export function DispatchOverview({
                 />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                 <Bar
-                  dataKey="Assigned"
+                  dataKey="Planned"
                   fill={shades.blue}
                   radius={[3, 3, 0, 0]}
                   isAnimationActive={false}
                 />
                 <Bar
-                  dataKey="Pending"
+                  dataKey="Awaiting"
                   fill={shades.slate}
                   radius={[3, 3, 0, 0]}
                   isAnimationActive={false}
@@ -492,11 +497,11 @@ export function DispatchOverview({
           <div className="bar-chart-key">
             <span>
               <i style={{ background: shades.blue }} />
-              Assigned
+              Planned
             </span>
             <span>
               <i style={{ background: shades.slate }} />
-              Pending
+              Awaiting decision
             </span>
             <span>
               <i style={{ background: shades.amber }} />
@@ -510,8 +515,8 @@ export function DispatchOverview({
             <thead>
               <tr>
                 <th>Brand</th>
-                <th>Assigned</th>
-                <th>Pending</th>
+                <th>Planned</th>
+                <th>Awaiting</th>
                 <th>Deferred</th>
               </tr>
             </thead>
@@ -519,8 +524,8 @@ export function DispatchOverview({
               {brandData.map((row) => (
                 <tr key={row.brand}>
                   <th>{row.brand}</th>
-                  <td>{row.Assigned}</td>
-                  <td>{row.Pending}</td>
+                  <td>{row.Planned}</td>
+                  <td>{row.Awaiting}</td>
                   <td>{row.Deferred}</td>
                 </tr>
               ))}
@@ -608,7 +613,7 @@ export function DispatchOverview({
             id="planning-companion-content"
             className="overview-drawer-scroll"
             role="region"
-            aria-label="Scrollable planning companion"
+            aria-label="Planning companion content"
             tabIndex={0}
           >
             <label className="companion-size-control">
@@ -626,7 +631,7 @@ export function DispatchOverview({
             <Calendar key={date.slice(0, 7)} date={date} onDate={onDate} />
             <section className="companion-queue">
               <div className="overview-section-title">
-                <h3>Awaiting allocation</h3>
+                <h3>Awaiting decision</h3>
                 <span>{pending.length}</span>
               </div>
               <div
@@ -667,7 +672,7 @@ export function DispatchOverview({
                       {formatTime(order.window[1])}
                     </small>
                     <span>
-                      Open in order intake
+                      Open in Orders
                       <ChevronRight size={14} aria-hidden="true" />
                     </span>
                   </button>

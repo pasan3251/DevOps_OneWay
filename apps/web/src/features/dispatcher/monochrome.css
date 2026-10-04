@@ -1,0 +1,124 @@
+.dispatch-app,
+.dispatch-dialog,
+.workspace-notification-panel {
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --primary-hover: #262626;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #262626;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #ededed;
+  --accent-foreground: #171717;
+  --destructive: #404040;
+  --border: #e5e5e5;
+  --input: #a3a3a3;
+  --ring: #525252;
+  --brand-navy: #0a0a0a;
+  --brand-muted: #a3a3a3;
+}
+
+.dispatch-app,
+.dispatch-dialog,
+.workspace-notification-panel {
+  filter: grayscale(1);
+}
+
+.dispatch-app[data-theme="dark"],
+.dispatch-dialog[data-theme="dark"],
+.workspace-notification-panel[data-theme="dark"] {
+  --background: #111111;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --popover: #171717;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #171717;
+  --primary-hover: #e5e5e5;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #0a0a0a;
+  --muted-foreground: #a3a3a3;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --destructive: #d4d4d4;
+  --border: #404040;
+  --input: #525252;
+  --ring: #d4d4d4;
+  --brand-navy: #050505;
+  --brand-muted: #a3a3a3;
+}
+
+.dispatch-sidebar {
+  background: #0a0a0a;
+}
+
+.dispatch-sidebar nav button {
+  color: #a3a3a3;
+}
+
+.dispatch-sidebar nav button:hover {
+  background: #262626;
+  color: #ffffff;
+}
+
+.dispatch-sidebar nav button[aria-current] {
+  background: #ffffff;
+  color: #0a0a0a;
+}
+
+.dispatch-sidebar nav button[aria-current] .nav-count {
+  background: #262626;
+  color: #ffffff;
+}
+
+.nav-count,
+.user-avatar {
+  background: #404040;
+}
+
+.dispatch-user {
+  border-top-color: #404040;
+}
+
+.operation-status,
+.carry-over-badge,
+.plan-status,
+.demo-label {
+  border-color: var(--border);
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.status-pending,
+.status-assigned,
+.status-deferred,
+.plan-status.is-published,
+.dispatch-feedback,
+.dispatch-feedback.is-error,
+.overview-priority.has-priority,
+.operations-note,
+.dispatch-published,
+.route-check-pass,
+.route-check-fail {
+  border-color: var(--border);
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.dispatch-app meter::-webkit-meter-optimum-value,
+.dispatch-app meter::-moz-meter-bar,
+.dispatch-app progress::-webkit-progress-value {
+  background: #525252;
+}
+
+.dispatch-app ::-webkit-scrollbar-thumb {
+  background: #737373;
+}

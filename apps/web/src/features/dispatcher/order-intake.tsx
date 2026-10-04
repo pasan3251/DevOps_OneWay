@@ -9,8 +9,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Search,
-  Snowflake,
-  Sun,
   Truck,
   Undo2,
 } from "lucide-react";
@@ -22,6 +20,7 @@ import {
   type OrderStatus,
 } from "./dispatch-operations";
 import { formatTime, orders, type Depot, type Plan } from "./planning";
+import { OrderTable, orderStatusLabel } from "./order-table";
 
 type Props = {
   plan: Plan;
@@ -115,7 +114,9 @@ export function OrderIntake(props: Props) {
             <h2>
               Daily orders <span>{depotOrders.length}</span>
             </h2>
-            <p>Inspect requirements before allocating a whole order.</p>
+            <p>
+              Inspect requirements before approving a whole order for planning.
+            </p>
           </div>
           <ClipboardList size={21} aria-hidden="true" />
         </div>
@@ -130,7 +131,7 @@ export function OrderIntake(props: Props) {
                   setPage(1);
                 }}
               >
-                {value}
+                {value === "All" ? value : orderStatusLabel(value)}
                 <span>
                   {value === "All"
                     ? depotOrders.length
@@ -186,105 +187,18 @@ export function OrderIntake(props: Props) {
           role="region"
           aria-label="Scrollable order requirements"
         >
-          <table className="operations-table intake-table">
-            <caption className="sr-only">
-              {depot} orders and allocation requirements
-            </caption>
-            <thead>
-              <tr>
-                <th>Order / outlet</th>
-                <th>Temperature</th>
-                <th>Access</th>
-                <th>Delivery window</th>
-                <th>Payload</th>
-                <th>Status / vehicle</th>
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((order) => {
-                const state = orderStatus(order.id, plan);
-                const trip = plan.trips.find((item) =>
-                  item.orderIds.includes(order.id),
-                );
-                return (
-                  <tr
-                    key={order.id}
-                    className={
-                      selectedOrder?.id === order.id ? "is-selected" : ""
-                    }
-                  >
-                    <td>
-                      <div className="intake-order-identity">
-                        <input
-                          id={`dispatch-order-${order.id}`}
-                          type="checkbox"
-                          aria-label={`Select ${order.id}`}
-                          disabled={published || state !== "Pending"}
-                          checked={selected.includes(order.id)}
-                          onChange={(event) => {
-                            setDetailsId(order.id);
-                            props.onSelect(
-                              event.target.checked ? [order.id] : [],
-                            );
-                          }}
-                        />
-                        <div>
-                          <span className="order-id">
-                            {order.id}
-                            {order.carryOver && (
-                              <span className="carry-over-badge">
-                                Carry-over
-                              </span>
-                            )}
-                          </span>
-                          <strong>{order.outlet}</strong>
-                          <small>{order.district}</small>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="temperature-label">
-                        {order.chilled ? (
-                          <Snowflake size={14} aria-hidden="true" />
-                        ) : (
-                          <Sun size={14} aria-hidden="true" />
-                        )}
-                        {order.chilled ? "Chilled" : "Ambient"}
-                      </span>
-                    </td>
-                    <td>{order.vanOnly ? "Van only" : "Truck / van"}</td>
-                    <td>
-                      {formatTime(order.window[0])}–
-                      {formatTime(order.window[1])}
-                    </td>
-                    <td>
-                      {order.kg.toLocaleString()} kg<small>{order.m3} m³</small>
-                    </td>
-                    <td>
-                      <span
-                        className={`operation-status status-${state.toLowerCase()}`}
-                      >
-                        {state}
-                      </span>
-                      <small>{trip?.vehicleId ?? "Not allocated"}</small>
-                    </td>
-                    <td>
-                      <button
-                        className="dispatch-text-button"
-                        aria-label={`View ${order.id}`}
-                        onClick={() => inspect(order.id)}
-                      >
-                        View <ArrowRight size={14} aria-hidden="true" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <OrderTable
+            rows={visible}
+            plan={plan}
+            published={published}
+            selectedOrderId={selectedOrder?.id}
+            selectedIds={selected}
+            onInspect={inspect}
+            onSelect={(orderId, checked) => {
+              setDetailsId(orderId);
+              props.onSelect(checked ? [orderId] : []);
+            }}
+          />
           {!filtered.length && (
             <div className="operations-empty">
               <Search size={28} aria-hidden="true" />
@@ -384,7 +298,7 @@ export function OrderIntake(props: Props) {
                     <span
                       className={`operation-status status-${detailStatus?.toLowerCase()}`}
                     >
-                      {detailStatus}
+                      {detailStatus ? orderStatusLabel(detailStatus) : null}
                     </span>
                   </div>
                   <dl className="operation-facts">
@@ -505,7 +419,7 @@ export function OrderIntake(props: Props) {
                         onClick={() => props.onDefer(selectedOrder.id)}
                       >
                         <Undo2 size={15} />
-                        Defer orders
+                        Defer order
                       </button>
                     </div>
                   )}
@@ -522,7 +436,8 @@ export function OrderIntake(props: Props) {
                         Open route <ArrowRight size={15} />
                       </Button>
                       <p className="small-note">
-                        Assigned for planning. Delivery has not been recorded.
+                        Planned for this trip. Loading and delivery have not
+                        started.
                       </p>
                     </div>
                   )}

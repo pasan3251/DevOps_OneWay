@@ -103,7 +103,7 @@ export function RouteMap({
             ...trip.orderIds.map((id) => demoPositions[id]).filter(Boolean),
           ];
           L.polyline(route, {
-            color: trip.id === data.selectedTrip ? "#1765ab" : "#247a70",
+            color: trip.id === data.selectedTrip ? "#171717" : "#737373",
             weight: trip.id === data.selectedTrip ? 5 : 3,
             dashArray: "8 6",
           })

@@ -71,7 +71,7 @@ export function WorkspaceTools({
   if (pending.length)
     notifications.push({
       id: `pending-${depot}-${pending.length}`,
-      title: `${pending.length} orders awaiting allocation`,
+      title: `${pending.length} orders awaiting a dispatcher decision`,
       description: `${pending.filter((o) => o.carryOver).length} carry-over orders need review in the local demo plan.`,
       role: "Dispatcher",
       view: "planning",
@@ -319,7 +319,7 @@ export function WorkspaceTools({
                     onNavigate("chat");
                   }}
                 >
-                  View in Chat
+                  View in Messages
                 </button>
               </div>
             </>

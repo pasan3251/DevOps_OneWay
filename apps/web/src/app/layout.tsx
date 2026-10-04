@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@fontsource-variable/public-sans";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,7 +13,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <TooltipProvider delayDuration={250}>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }

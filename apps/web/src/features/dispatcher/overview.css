@@ -19,6 +19,36 @@
   padding-top: 24px;
   padding-bottom: 18px;
 }
+.dispatch-scroll-shell .dispatch-content.dispatch-content-scrollable {
+  display: block;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.dispatch-content-scrollable .operations-layout {
+  min-height: clamp(560px, calc(100svh - 300px), 700px);
+}
+.dispatch-content-scrollable .overview-layout {
+  flex: none;
+  min-height: auto;
+  align-items: start;
+}
+.dispatch-content-scrollable .overview-scroll,
+.dispatch-content-scrollable .overview-drawer-scroll {
+  overflow: visible;
+  min-height: auto;
+  max-height: none;
+  overscroll-behavior: auto;
+  scrollbar-gutter: auto;
+}
+.dispatch-content-scrollable .overview-scroll {
+  padding-right: 0;
+}
+.dispatch-content-scrollable .overview-drawer {
+  align-self: start;
+  min-height: auto;
+  max-height: none;
+}
 .dispatch-scroll-shell .dispatch-topbar,
 .dispatch-scroll-shell .dispatch-heading,
 .dispatch-scroll-shell .dispatch-controls,
@@ -107,7 +137,7 @@
 }
 .overview-stats {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   border: 1px solid var(--border);
   background: var(--background);
   border-radius: 12px;

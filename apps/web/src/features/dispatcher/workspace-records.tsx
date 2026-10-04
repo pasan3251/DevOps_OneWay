@@ -279,7 +279,7 @@ export function DeferralRecords({
             <div
               className="records-inspector-scroll"
               tabIndex={0}
-              aria-label="Scrollable deferral analysis"
+              aria-label="Deferral analysis"
             >
               <label className="companion-size-control">
                 Panel width
@@ -351,22 +351,35 @@ export function DeferralRecords({
                     value: records.filter((record) => record.entry.reason === r)
                       .length,
                     fill: [
-                      "#1765ab",
-                      "#247a70",
-                      "#af7429",
-                      "#7561a8",
-                      "#7a8ea5",
+                      "#171717",
+                      "#404040",
+                      "#737373",
+                      "#525252",
+                      "#a3a3a3",
                     ][i % 5],
                   }))}
                 />
                 <Donut
-                  title="By recorded role"
+                  title="By decision type"
                   unit="records"
                   slices={[
                     {
-                      name: "Dispatcher",
-                      value: records.length,
-                      fill: "#1765ab",
+                      name: "Operational constraint",
+                      value: records.filter(
+                        (record) =>
+                          record.entry.reason !==
+                          "Lower priority under capacity pressure",
+                      ).length,
+                      fill: "#171717",
+                    },
+                    {
+                      name: "Priority policy",
+                      value: records.filter(
+                        (record) =>
+                          record.entry.reason ===
+                          "Lower priority under capacity pressure",
+                      ).length,
+                      fill: "#a3a3a3",
                     },
                   ]}
                 />
@@ -440,7 +453,7 @@ export function OutletDirectory({
             slices={["Fresh", "Style", "Tech"].map((name, i) => ({
               name,
               value: filtered.filter((o) => o.brand === name).length,
-              fill: ["#247a70", "#1765ab", "#7561a8"][i],
+              fill: ["#171717", "#525252", "#a3a3a3"][i],
             }))}
           />
           <p className="workspace-note">

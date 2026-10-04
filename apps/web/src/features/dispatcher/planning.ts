@@ -225,12 +225,22 @@ export const vehicles: Vehicle[] = [
   },
 ];
 export const deferralReasons = [
+  "No refrigerated vehicle available",
+  "No eligible van available",
+  "Weight capacity exceeded",
+  "Volume capacity exceeded",
+  "Delivery window unachievable",
+  "Time budget exceeded",
+  "Fuel quota exceeded",
+  "Vehicle in workshop",
+  "Lower priority under capacity pressure",
+  "Other operational constraint",
+];
+const legacyDeferralReasons = [
   "No refrigerated capacity",
   "No eligible van",
   "Weight capacity exhausted",
   "Volume capacity exhausted",
-  "Delivery window unachievable",
-  "Vehicle in workshop",
 ];
 export type Deferral = { orderId: string; reason: string; note: string };
 export type Plan = { trips: Trip[]; deferrals: Deferral[]; published: Depot[] };
@@ -395,7 +405,7 @@ function isPlan(value: unknown): value is Plan {
       (item) =>
         item &&
         orders.some((order) => order.id === item.orderId) &&
-        deferralReasons.includes(item.reason) &&
+        [...deferralReasons, ...legacyDeferralReasons].includes(item.reason) &&
         typeof item.note === "string",
     ) &&
     plan.published.every((depot) => ["Peliyagoda", "Kandy"].includes(depot))

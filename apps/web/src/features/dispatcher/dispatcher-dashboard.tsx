@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -39,6 +39,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { WaypointLogo } from "@/components/waypoint-logo";
 import { authService, type Session } from "@/features/auth/auth-service";
 import {
@@ -78,6 +84,7 @@ import {
   type WorkspaceState,
 } from "./workspace-state";
 import "./workspace.css";
+import "./monochrome.css";
 
 type View =
   | "overview"
@@ -88,19 +95,38 @@ type View =
   | "outlets"
   | "calendar"
   | "chat";
+type RouteMode = "allocate" | "assign" | "tracking" | "manage";
+
+const dispatcherNavigation = [
+  { id: "overview", label: "Overview", Icon: LayoutDashboard },
+  { id: "planning", label: "Orders", Icon: ClipboardList },
+  { id: "fleet", label: "Fleet", Icon: Truck },
+  { id: "routes", label: "Planning & routes", Icon: Route },
+  { id: "deferrals", label: "Deferrals", Icon: Undo2 },
+  { id: "outlets", label: "Outlets", Icon: Store },
+  { id: "calendar", label: "Capacity outlook", Icon: CalendarDays },
+  { id: "chat", label: "Messages", Icon: MessageSquare },
+] as const;
+
+const routeModes = [
+  ["allocate", "Allocate vehicles"],
+  ["assign", "Build routes"],
+  ["manage", "Published routes"],
+  ["tracking", "Live operations"],
+] as const;
+const NAV_COLLAPSED_KEY = "waypoint.dispatcher.navigation-collapsed.v1";
+
 export function DispatcherDashboard() {
   const router = useRouter();
+  const contentRef = useRef<HTMLElement>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [plan, setPlan] = useState<Plan>(initialPlan);
   const [depot, setDepot] = useState<Depot>("Peliyagoda");
   const [date, setDate] = useState(DEMO_DATE);
   const [view, setView] = useState<View>("overview");
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
-  const [routeMode, setRouteMode] = useState<"assign" | "tracking" | "manage">(
-    "assign",
-  );
+  const [routeMode, setRouteMode] = useState<RouteMode>("allocate");
   const [mapOrder, setMapOrder] = useState<string | null>(null);
-  const [fleetTab, setFleetTab] = useState("Current fleet");
   const [navCollapsed, setNavCollapsed] = useState(true);
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("All brands");
@@ -148,9 +174,11 @@ export function DispatcherDashboard() {
         setView(destination as View);
       if (
         destination === "routes" &&
-        (routeDestination === "tracking" || routeDestination === "manage")
+        (["allocate", "assign", "tracking", "manage"] as const).includes(
+          routeDestination as RouteMode,
+        )
       )
-        setRouteMode(routeDestination);
+        setRouteMode(routeDestination as RouteMode);
       try {
         setPlan(planningService.load());
       } catch {
@@ -165,9 +193,20 @@ export function DispatcherDashboard() {
           "Your saved calendar, chat and appearance could not be read. They will be replaced only after a successful local save.",
         );
       }
+      try {
+        const storedNavigation = window.localStorage.getItem(NAV_COLLAPSED_KEY);
+        if (storedNavigation !== null)
+          setNavCollapsed(storedNavigation === "true");
+      } catch {
+        // Navigation remains usable even when browser preference storage fails.
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, [router]);
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [routeMode, view]);
 
   const isDemoDate = date === DEMO_DATE;
   const depotOrders = isDemoDate
@@ -208,7 +247,7 @@ export function DispatcherDashboard() {
   const selectedOrders = pending.filter((order) => selected.includes(order.id));
 
   function navigateView(value: View) {
-    if (value === "routes") setRouteMode("assign");
+    if (value === "routes") setRouteMode("allocate");
     if (value === "planning") {
       setSelected((current) => current.slice(0, 1));
       setAssignmentErrors([]);
@@ -220,12 +259,23 @@ export function DispatcherDashboard() {
       `${window.location.pathname}${value === "overview" ? "" : `#${value}`}`,
     );
   }
-  function navigateRouteMode(value: "assign" | "tracking" | "manage") {
+  function toggleNavigation() {
+    const next = !navCollapsed;
+    setNavCollapsed(next);
+    try {
+      window.localStorage.setItem(NAV_COLLAPSED_KEY, String(next));
+    } catch {
+      setFailure(
+        "The navigation preference could not be saved, but the workspace remains usable.",
+      );
+    }
+  }
+  function navigateRouteMode(value: RouteMode) {
     setRouteMode(value);
     window.history.replaceState(
       null,
       "",
-      `${window.location.pathname}#routes${value === "assign" ? "" : `/${value}`}`,
+      `${window.location.pathname}#routes${value === "allocate" ? "" : `/${value}`}`,
     );
   }
   function saveWorkspace(next: WorkspaceState, feedback: string) {
@@ -350,7 +400,7 @@ export function DispatcherDashboard() {
       )
     ) {
       setTripId(trip.id);
-      navigateView("routes");
+      openRoute(trip.id);
       setModal(null);
     }
   }
@@ -406,6 +456,7 @@ export function DispatcherDashboard() {
   function openRoute(id?: string) {
     if (id) setTripId(id);
     navigateView("routes");
+    navigateRouteMode("assign");
   }
   function createAssignedTrip(orderId: string, vehicleId: string) {
     if (published) return;
@@ -422,8 +473,32 @@ export function DispatcherDashboard() {
     if (save(proposal.next, `${order.id} allocated to ${proposal.trip.id}.`)) {
       setSelected([]);
       setTripId(proposal.trip.id);
-      navigateView("routes");
+      openRoute(proposal.trip.id);
     }
+  }
+
+  function openTripCreation(vehicleId: string) {
+    setNewVehicle(vehicleId);
+    setModal("trip");
+  }
+
+  function replaceRouteVehicle(vehicleId: string) {
+    if (!activeTrip || published) return;
+    const updated = { ...activeTrip, vehicleId };
+    const next = {
+      ...plan,
+      trips: plan.trips.map((trip) =>
+        trip.id === activeTrip.id ? updated : trip,
+      ),
+    };
+    const checks = validateTrip(updated, next).filter(
+      (issue) => issue !== "Add at least one order to this trip.",
+    );
+    if (checks.length) {
+      setFailure(checks.join(" "));
+      return;
+    }
+    if (save(next, "Route vehicle updated.")) openRoute(activeTrip.id);
   }
   if (!session)
     return (
@@ -441,47 +516,37 @@ export function DispatcherDashboard() {
       <aside className="dispatch-sidebar">
         <WaypointLogo light />
         <nav aria-label="Dispatcher navigation">
-          {(
-            [
-              { id: "overview", label: "Dashboard", Icon: LayoutDashboard },
-              { id: "planning", label: "Order intake", Icon: ClipboardList },
-              { id: "fleet", label: "Manage fleet", Icon: Truck },
-              { id: "routes", label: "Route planning", Icon: Route },
-              { id: "deferrals", label: "Deferrals", Icon: Undo2 },
-              { id: "outlets", label: "Outlets", Icon: Store },
-              { id: "calendar", label: "Calendar", Icon: CalendarDays },
-              { id: "chat", label: "Chat", Icon: MessageSquare },
-            ] as const
-          ).map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              aria-label={label}
-              title={navCollapsed ? label : undefined}
-              aria-current={view === id ? "page" : undefined}
-              onClick={() => {
-                navigateView(id);
-                setMessage("");
-              }}
-            >
-              <Icon size={19} aria-hidden="true" />
-              <span className="dispatch-nav-label">{label}</span>
-              {id === "deferrals" && deferred.length > 0 && (
-                <span className="nav-count">{deferred.length}</span>
+          {dispatcherNavigation.map(({ id, label, Icon }) => (
+            <Tooltip key={id}>
+              <TooltipTrigger asChild>
+                <button
+                  aria-label={label}
+                  aria-current={view === id ? "page" : undefined}
+                  onClick={() => {
+                    navigateView(id);
+                    setMessage("");
+                  }}
+                >
+                  <Icon size={19} aria-hidden="true" />
+                  <span className="dispatch-nav-label">{label}</span>
+                  {id === "deferrals" && deferred.length > 0 && (
+                    <span className="nav-count">{deferred.length}</span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              {navCollapsed && (
+                <TooltipContent side="right" sideOffset={8}>
+                  {label}
+                </TooltipContent>
               )}
-            </button>
+            </Tooltip>
           ))}
           {view === "routes" && (
             <div
               className="dispatch-route-subnav"
-              aria-label="Route planning views"
+              aria-label="Planning and route views"
             >
-              {(
-                [
-                  ["assign", "Assign routes"],
-                  ["tracking", "Track deliveries"],
-                  ["manage", "Manage assigned routes"],
-                ] as const
-              ).map(([id, label]) => (
+              {routeModes.map(([id, label]) => (
                 <button
                   key={id}
                   aria-current={routeMode === id ? "page" : undefined}
@@ -521,7 +586,7 @@ export function DispatcherDashboard() {
                 navCollapsed ? "Expand navigation" : "Collapse navigation"
               }
               aria-expanded={!navCollapsed}
-              onClick={() => setNavCollapsed(!navCollapsed)}
+              onClick={toggleNavigation}
             >
               {navCollapsed ? (
                 <PanelLeftOpen size={20} aria-hidden="true" />
@@ -558,42 +623,45 @@ export function DispatcherDashboard() {
             </button>
           </div>
         </header>
-        <main className="dispatch-content">
+        <main
+          ref={contentRef}
+          className="dispatch-content dispatch-content-scrollable"
+        >
           <div className="dispatch-heading">
             <div>
               <h1>
                 {view === "overview"
-                  ? "Today’s overview"
+                  ? "Today’s plan"
                   : view === "planning"
-                    ? "Order intake"
+                    ? "Orders"
                     : view === "fleet"
-                      ? "Manage fleet"
+                      ? "Fleet"
                       : view === "routes"
-                        ? "Route planning"
+                        ? "Planning & routes"
                         : view === "deferrals"
                           ? "Deferred orders"
                           : view === "outlets"
                             ? "Outlets"
                             : view === "calendar"
-                              ? "Calendar"
-                              : "Chat"}
+                              ? "Capacity outlook"
+                              : "Messages"}
               </h1>
               <p>
                 {view === "overview"
-                  ? "See the day at a glance, then focus on what needs planning."
+                  ? "See decisions, constraints and live operations at a glance."
                   : view === "planning"
-                    ? "Inspect each order and allocate it to the right trip."
+                    ? "Review each order and approve it for planning or defer it with a reason."
                     : view === "fleet"
-                      ? "Find the right vehicle for the next trip."
+                      ? "Inspect availability, condition and capability across the fleet."
                       : view === "routes"
-                        ? "Build the route. Check the details. Keep deliveries moving."
+                        ? "Allocate vehicles, build routes, validate constraints and monitor published work."
                         : view === "deferrals"
                           ? "Keep every unserved order visible, with a reason to act on."
                           : view === "outlets"
                             ? "Know each outlet’s requirements before planning its delivery."
                             : view === "calendar"
-                              ? "Keep dispatch notes and planned departures together."
-                              : "Keep local demo conversations organized by role."}
+                              ? "Compare planned demand, fleet availability and operational events."
+                              : "Keep operational conversations organized by role and context."}
               </p>
             </div>
             <Button
@@ -664,10 +732,10 @@ export function DispatcherDashboard() {
                 <strong>{depotOrders.length}</strong> orders for this day
               </span>
               <span>
-                <strong>{pending.length}</strong> awaiting allocation
+                <strong>{pending.length}</strong> awaiting decision
               </span>
               <span>
-                <strong>{assigned.length}</strong> assigned across{" "}
+                <strong>{assigned.length}</strong> planned across{" "}
                 {depotTrips.length} trip{depotTrips.length === 1 ? "" : "s"}
               </span>
               <span>
@@ -810,36 +878,31 @@ export function DispatcherDashboard() {
             />
           ) : view === "routes" ? (
             <div className="route-planning-workspace">
-              <div
-                className="route-mode-tabs"
-                aria-label="Route planning modes"
+              <Tabs
+                value={routeMode}
+                onValueChange={(value) => navigateRouteMode(value as RouteMode)}
+                aria-label="Planning and route modes"
               >
-                {(
-                  [
-                    ["assign", "Assign routes"],
-                    ["tracking", "Track deliveries"],
-                    ["manage", "Manage assigned routes"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    aria-pressed={routeMode === id}
-                    onClick={() => navigateRouteMode(id)}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <button
-                  className="dispatch-text-button"
-                  onClick={() => {
-                    setFleetTab("Managed capacities");
-                    navigateView("fleet");
-                  }}
-                >
-                  Review capacities
-                </button>
-              </div>
-              {routeMode !== "assign" ? (
+                <TabsList className="route-mode-tabs" variant="line">
+                  {routeModes.map(([id, label]) => (
+                    <TabsTrigger key={id} value={id}>
+                      {label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              {routeMode === "allocate" ? (
+                <FleetManager
+                  fixedView="capacity"
+                  plan={plan}
+                  depot={depot}
+                  activeTrip={activeTrip}
+                  published={published}
+                  onRoute={openRoute}
+                  onCreate={openTripCreation}
+                  onUse={replaceRouteVehicle}
+                />
+              ) : routeMode !== "assign" ? (
                 <RouteViews
                   mode={routeMode}
                   plan={plan}
@@ -1415,36 +1478,14 @@ export function DispatcherDashboard() {
             </div>
           ) : view === "fleet" ? (
             <FleetManager
-              key={fleetTab}
-              initialTab={fleetTab}
+              fixedView="fleet"
               plan={plan}
               depot={depot}
               activeTrip={activeTrip}
               published={published}
               onRoute={openRoute}
-              onCreate={(vehicleId) => {
-                setNewVehicle(vehicleId);
-                setModal("trip");
-              }}
-              onUse={(vehicleId) => {
-                if (!activeTrip || published) return;
-                const updated = { ...activeTrip, vehicleId };
-                const next = {
-                  ...plan,
-                  trips: plan.trips.map((trip) =>
-                    trip.id === activeTrip.id ? updated : trip,
-                  ),
-                };
-                const checks = validateTrip(updated, next).filter(
-                  (issue) => issue !== "Add at least one order to this trip.",
-                );
-                if (checks.length) {
-                  setFailure(checks.join(" "));
-                  return;
-                }
-                if (save(next, "Route vehicle updated."))
-                  openRoute(activeTrip.id);
-              }}
+              onCreate={openTripCreation}
+              onUse={replaceRouteVehicle}
             />
           ) : (
             <DeferralRecords
@@ -1629,7 +1670,7 @@ export function DispatcherDashboard() {
                   <dd>{deferred.length}</dd>
                 </div>
                 <div>
-                  <dt>Still awaiting allocation</dt>
+                  <dt>Still awaiting a decision</dt>
                   <dd>{pending.length}</dd>
                 </div>
               </dl>
