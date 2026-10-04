@@ -92,32 +92,32 @@ export function OrdersView({
   return (
     <div className="space-y-5">
       {/* 1. Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold text-slate-100">Replenishment Orders</h1>
-          <p className="text-xs text-slate-400">
+          <h1 className="text-xl font-bold text-foreground">Replenishment Orders</h1>
+          <p className="text-xs text-muted-foreground">
             Lifecycle monitoring for all recorded, scheduled, in-transit, and delivered orders.
           </p>
         </div>
 
         <Button
           onClick={onNavigateToNewOrder}
-          className="bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs h-9 px-4 shadow-sm"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs h-9 px-4 shadow-sm"
         >
           New Order
         </Button>
       </div>
 
       {/* 2. Search & Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card p-3 rounded-lg border border-border">
         <div className="relative flex-1 max-w-sm">
-          <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-500" />
+          <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search by order number or date..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-slate-950 border-slate-700 text-slate-100 pl-9 h-9 text-xs"
+            className="bg-background border-border text-foreground pl-9 h-9 text-xs"
           />
         </div>
 
@@ -136,8 +136,8 @@ export function OrdersView({
               onClick={() => setStatusFilter(pill.id)}
               className={`px-3 py-1 rounded-full whitespace-nowrap font-medium transition-colors ${
                 statusFilter === pill.id
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
               {pill.label}
@@ -148,14 +148,14 @@ export function OrdersView({
 
       {/* 3. Orders Data Table */}
       {filteredOrders.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900/30 rounded-xl border border-slate-800 text-slate-500 text-xs">
+        <div className="p-12 text-center bg-card rounded-xl border border-border text-muted-foreground text-xs">
           No replenishment orders found matching current filters.
         </div>
       ) : (
-        <div className="bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
+        <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-medium text-[11px]">
+              <thead className="bg-muted/80 border-b border-border text-muted-foreground uppercase font-medium text-[11px]">
                 <tr>
                   <th className="py-3 px-4">Order Number</th>
                   <th className="py-3 px-4">Target Date</th>
@@ -166,7 +166,7 @@ export function OrdersView({
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-200">
+              <tbody className="divide-y divide-border text-foreground">
                 {filteredOrders.map((order) => {
                   const isChilled = order.tempRequirement === 'chilled';
 
@@ -174,35 +174,35 @@ export function OrdersView({
                     <tr
                       key={order.id}
                       onClick={() => onSelectOrder(order)}
-                      className="hover:bg-slate-800/40 cursor-pointer transition-colors"
+                      className="hover:bg-muted/50 cursor-pointer transition-colors"
                     >
-                      <td className="py-3 px-4 font-mono font-medium text-sky-400">
+                      <td className="py-3 px-4 font-mono font-medium text-foreground">
                         {order.orderNumber}
                       </td>
                       <td className="py-3 px-4 flex items-center gap-1.5">
-                        <Calendar className="h-3 w-3 text-slate-500" />
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
                         {order.orderDate}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5">
                           {isChilled ? (
-                            <Snowflake className="h-3.5 w-3.5 text-cyan-400" />
+                            <Snowflake className="h-3.5 w-3.5 text-primary" />
                           ) : (
-                            <Sun className="h-3.5 w-3.5 text-amber-400" />
+                            <Sun className="h-3.5 w-3.5 text-primary" />
                           )}
                           <span className="capitalize">{order.tempRequirement}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-slate-300">
+                      <td className="py-3 px-4 text-muted-foreground">
                         {order.totalItemsCount} pkgs ({order.totalWeightKg} kg / {order.totalVolumeM3} m³)
                       </td>
                       <td className="py-3 px-4">
                         {order.isCutoffLocked ? (
-                          <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30">
+                          <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border">
                             Cutoff Locked
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-400">
+                          <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border">
                             Pre-Cutoff
                           </Badge>
                         )}
@@ -210,19 +210,7 @@ export function OrdersView({
                       <td className="py-3 px-4">
                         <Badge
                           variant="outline"
-                          className={`text-[10px] ${
-                            order.status === 'DELIVERED'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                              : order.status === 'IN_TRANSIT'
-                              ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
-                              : order.status === 'ASSIGNED'
-                              ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
-                              : order.status === 'QUEUED_NEXT_RUN'
-                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                              : order.status === 'CANCELLED'
-                              ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                              : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                          }`}
+                          className="text-[10px] bg-muted text-foreground border-border"
                         >
                           {order.status}
                         </Badge>
@@ -231,7 +219,7 @@ export function OrdersView({
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 w-7 p-0 text-slate-400 hover:text-slate-100"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
                         >
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
@@ -248,64 +236,56 @@ export function OrdersView({
       {/* 4. Canonical Order Detail Drawer / Modal */}
       {selectedOrder && (
         <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && onSelectOrder(null)}>
-          <DialogContent className="sm:max-w-[640px] bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[640px] bg-card border-border text-foreground max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center justify-between pb-2 border-b border-border">
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <DialogTitle className="text-lg font-bold text-slate-100 font-mono">
+                    <DialogTitle className="text-lg font-bold text-foreground font-mono">
                       {selectedOrder.orderNumber}
                     </DialogTitle>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] ${
-                        selectedOrder.status === 'DELIVERED'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : selectedOrder.status === 'IN_TRANSIT'
-                          ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
-                          : selectedOrder.status === 'CANCELLED'
-                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}
+                      className="text-[10px] bg-muted text-foreground border-border"
                     >
                       {selectedOrder.status}
                     </Badge>
                   </div>
-                  <DialogDescription className="text-xs text-slate-400">
+                  <DialogDescription className="text-xs text-muted-foreground">
                     Submitted: {new Date(selectedOrder.submissionTime).toLocaleString()}
                   </DialogDescription>
                 </div>
 
-                <Badge variant="outline" className="bg-slate-800/80 text-slate-300 text-xs capitalize">
+                <Badge variant="outline" className="bg-muted text-foreground text-xs capitalize border-border">
                   {selectedOrder.tempRequirement} Cargo
                 </Badge>
               </div>
             </DialogHeader>
 
             {actionError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded text-rose-400 text-xs flex items-center gap-2">
+              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded text-destructive text-xs flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{actionError}</span>
               </div>
             )}
 
             {/* Metrics Overview Cards */}
-            <div className="grid grid-cols-3 gap-2 p-3 bg-slate-950/60 rounded-lg border border-slate-800 text-center text-xs">
+            <div className="grid grid-cols-3 gap-2 p-3 bg-background rounded-lg border border-border text-center text-xs">
               <div>
-                <span className="text-slate-500 block">Total Items</span>
-                <span className="font-bold text-slate-100 text-sm mt-0.5 block">
+                <span className="text-muted-foreground block">Total Items</span>
+                <span className="font-bold text-foreground text-sm mt-0.5 block">
                   {selectedOrder.totalItemsCount} pkgs
                 </span>
               </div>
               <div>
-                <span className="text-slate-500 block">Consignment Weight</span>
-                <span className="font-bold text-slate-100 text-sm mt-0.5 block">
+                <span className="text-muted-foreground block">Consignment Weight</span>
+                <span className="font-bold text-foreground text-sm mt-0.5 block">
                   {selectedOrder.totalWeightKg} kg
                 </span>
               </div>
               <div>
-                <span className="text-slate-500 block">Consignment Volume</span>
-                <span className="font-bold text-slate-100 text-sm mt-0.5 block">
+                <span className="text-muted-foreground block">Consignment Volume</span>
+                <span className="font-bold text-foreground text-sm mt-0.5 block">
                   {selectedOrder.totalVolumeM3} m³
                 </span>
               </div>
@@ -313,14 +293,14 @@ export function OrdersView({
 
             {/* Itemized Lines */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-sky-400" />
+              <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-primary" />
                 Manifest Item Lines ({selectedOrder.items?.length || 0})
               </h4>
 
-              <div className="rounded-lg border border-slate-800 overflow-hidden">
+              <div className="rounded-lg border border-border overflow-hidden">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/90 text-slate-400 text-[10px] uppercase border-b border-slate-800">
+                  <thead className="bg-muted text-muted-foreground text-[10px] uppercase border-b border-border">
                     <tr>
                       <th className="py-2 px-3">SKU</th>
                       <th className="py-2 px-3">Description</th>
@@ -329,22 +309,22 @@ export function OrdersView({
                       <th className="py-2 px-3 text-right">Price</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                  <tbody className="divide-y divide-border text-foreground">
                     {(selectedOrder.items || []).map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/30">
-                        <td className="py-2 px-3 font-mono text-sky-400 text-[11px]">
+                      <tr key={idx} className="hover:bg-muted/50">
+                        <td className="py-2 px-3 font-mono text-foreground font-semibold text-[11px]">
                           {item.productCode}
                         </td>
-                        <td className="py-2 px-3 font-medium text-slate-200">
+                        <td className="py-2 px-3 font-medium text-foreground">
                           {item.productName}
                         </td>
-                        <td className="py-2 px-3 text-center font-bold text-slate-100">
+                        <td className="py-2 px-3 text-center font-bold text-foreground">
                           {item.quantityRequested}
                         </td>
-                        <td className="py-2 px-3 text-right text-slate-400">
+                        <td className="py-2 px-3 text-right text-muted-foreground">
                           {item.unitWeightKg} kg
                         </td>
-                        <td className="py-2 px-3 text-right font-mono text-slate-300">
+                        <td className="py-2 px-3 text-right font-mono text-foreground">
                           LKR {item.unitPrice.toLocaleString()}
                         </td>
                       </tr>
@@ -355,20 +335,20 @@ export function OrdersView({
             </div>
 
             {/* Contextual Actions */}
-            <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between sm:justify-between w-full">
+            <DialogFooter className="pt-3 border-t border-border flex items-center justify-between sm:justify-between w-full">
               <div>
                 {isCancellable ? (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCancelConfirmOpen(true)}
-                    className="border-rose-500/40 text-rose-400 hover:bg-rose-500/10 text-xs h-8 gap-1.5"
+                    className="border-destructive/40 text-destructive hover:bg-destructive/10 text-xs h-8 gap-1.5"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Cancel Order (Pre-Cutoff)
                   </Button>
                 ) : (
-                  <span className="text-[11px] text-slate-500 italic">
+                  <span className="text-[11px] text-muted-foreground italic">
                     Cancellation locked ({selectedOrder.status})
                   </span>
                 )}
@@ -378,7 +358,7 @@ export function OrdersView({
                 variant="outline"
                 size="sm"
                 onClick={() => onSelectOrder(null)}
-                className="border-slate-700 text-slate-300 text-xs h-8"
+                className="border-border text-foreground text-xs h-8 hover:bg-muted"
               >
                 Close Details
               </Button>
@@ -389,24 +369,24 @@ export function OrdersView({
 
       {/* 5. Cancellation Confirmation Dialog */}
       <Dialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
-        <DialogContent className="sm:max-w-[420px] bg-slate-900 border-slate-800 text-slate-100">
+        <DialogContent className="sm:max-w-[420px] bg-card border-border text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-rose-400 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-rose-400" />
+            <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
               Confirm Order Cancellation
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-400 pt-1">
-              Are you sure you want to cancel order <strong className="text-slate-200">{selectedOrder?.orderNumber}</strong>?
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              Are you sure you want to cancel order <strong className="text-foreground">{selectedOrder?.orderNumber}</strong>?
               This action cannot be undone and releases replenishment capacity back to the Peliyagoda hub.
             </DialogDescription>
           </DialogHeader>
 
-          <DialogFooter className="pt-2 border-t border-slate-800">
+          <DialogFooter className="pt-2 border-t border-border">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setCancelConfirmOpen(false)}
-              className="border-slate-700 text-slate-300 text-xs h-8"
+              className="border-border text-foreground text-xs h-8 hover:bg-muted"
             >
               Back
             </Button>
@@ -415,7 +395,7 @@ export function OrdersView({
               size="sm"
               disabled={isCancelling}
               onClick={handleCancelOrder}
-              className="bg-rose-600 hover:bg-rose-500 text-white text-xs h-8"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs h-8"
             >
               {isCancelling ? "Cancelling..." : "Confirm Cancellation"}
             </Button>
@@ -425,3 +405,4 @@ export function OrdersView({
     </div>
   );
 }
+

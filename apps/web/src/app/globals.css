@@ -81,6 +81,7 @@
 .workspace-page,
 .help-dialog,
 .driver-app-shell,
-.driver-viewport-wrapper {
+.driver-viewport-wrapper,
+.store-manager-app {
   filter: grayscale(1);
 }

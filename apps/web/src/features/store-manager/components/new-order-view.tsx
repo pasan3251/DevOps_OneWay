@@ -172,18 +172,18 @@ export function NewOrderView({
   return (
     <div className="space-y-6">
       {/* 1. Header & Step Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
               Replenishment Workflow (SM-1)
             </span>
-            <Badge variant="outline" className="bg-sky-500/10 text-sky-400 border-sky-500/30 text-[10px]">
+            <Badge variant="outline" className="bg-muted text-foreground border-border text-[10px]">
               {outlet.brand} Catalog
             </Badge>
           </div>
-          <h1 className="text-xl font-bold text-slate-100 mt-1">Create Store Order</h1>
-          <p className="text-xs text-slate-400">
+          <h1 className="text-xl font-bold text-foreground mt-1">Create Store Order</h1>
+          <p className="text-xs text-muted-foreground">
             Submit daily replenishment demand for {outlet.name} fulfilled by Peliyagoda Central Hub.
           </p>
         </div>
@@ -192,14 +192,14 @@ export function NewOrderView({
           <Button
             variant="outline"
             onClick={onCancel}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-9"
+            className="border-border text-foreground hover:bg-muted text-xs h-9"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmitOrder}
             disabled={cartSummary.totalItems === 0 || isSubmitting}
-            className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold gap-1.5 text-xs h-9 px-4 shadow-lg shadow-emerald-600/20"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5 text-xs h-9 px-4 shadow-sm"
           >
             <PackageCheck className="h-4 w-4" />
             {isSubmitting ? "Validating & Submitting..." : `Submit Order (${cartSummary.totalItems} pkgs)`}
@@ -208,7 +208,7 @@ export function NewOrderView({
       </div>
 
       {errorBanner && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-lg flex items-center gap-3 text-rose-400 text-xs">
+        <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg flex items-center gap-3 text-destructive text-xs">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span>{errorBanner}</span>
         </div>
@@ -217,24 +217,24 @@ export function NewOrderView({
       {/* 2. Order Context Controls (Delivery Date & Temperature Toggle) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Date Selector */}
-        <Card className="bg-slate-900/80 border-slate-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-4 space-y-2">
-            <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-sky-400" />
+            <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-primary" />
               Target Operating Delivery Date *
             </label>
             <Input
               type="date"
               value={orderDate}
               onChange={(e) => setOrderDate(e.target.value)}
-              className="bg-slate-950 border-slate-700 text-slate-100 h-10 font-mono text-sm"
+              className="bg-background border-border text-foreground h-10 font-mono text-sm"
               min={cutoff.nextDeliveryDate}
               required
             />
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-              <Clock className="h-3 w-3 text-amber-400" />
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Clock className="h-3 w-3 text-muted-foreground" />
               {cutoff.isPastCutoff ? (
-                <span className="text-rose-400 font-medium">
+                <span className="text-destructive font-medium">
                   Past 16:00 Cutoff — Order will enter queue for following dispatch run (T+2).
                 </span>
               ) : (
@@ -247,9 +247,9 @@ export function NewOrderView({
         </Card>
 
         {/* Temperature Requirement Selector (SM-ORD-002) */}
-        <Card className="bg-slate-900/80 border-slate-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-4 space-y-2">
-            <label className="text-xs font-medium text-slate-300 block">
+            <label className="text-xs font-medium text-foreground block">
               Temperature Cargo Regime (SM-ORD-002) *
             </label>
 
@@ -263,14 +263,14 @@ export function NewOrderView({
                   }}
                   className={`p-2.5 rounded-lg border text-left transition-all flex items-center gap-2.5 ${
                     tempRequirement === 'ambient'
-                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-primary/10 border-primary text-foreground shadow-sm'
+                      : 'bg-background border-border text-muted-foreground hover:border-foreground/50'
                   }`}
                 >
-                  <Sun className="h-4 w-4 text-amber-400 shrink-0" />
+                  <Sun className="h-4 w-4 text-primary shrink-0" />
                   <div>
                     <span className="text-xs font-semibold block">Ambient Goods</span>
-                    <span className="text-[10px] text-slate-400">Dry grocery &amp; staples</span>
+                    <span className="text-[10px] text-muted-foreground">Dry grocery &amp; staples</span>
                   </div>
                 </button>
 
@@ -282,30 +282,30 @@ export function NewOrderView({
                   }}
                   className={`p-2.5 rounded-lg border text-left transition-all flex items-center gap-2.5 ${
                     tempRequirement === 'chilled'
-                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-primary/10 border-primary text-foreground shadow-sm'
+                      : 'bg-background border-border text-muted-foreground hover:border-foreground/50'
                   }`}
                 >
-                  <Snowflake className="h-4 w-4 text-cyan-400 shrink-0" />
+                  <Snowflake className="h-4 w-4 text-primary shrink-0" />
                   <div>
                     <span className="text-xs font-semibold block">Chilled Goods</span>
-                    <span className="text-[10px] text-slate-400">Cold chain dairy &amp; produce</span>
+                    <span className="text-[10px] text-muted-foreground">Cold chain dairy &amp; produce</span>
                   </div>
                 </button>
               </div>
             ) : (
-              <div className="p-2.5 bg-slate-950/60 rounded-lg border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
-                <Sun className="h-4 w-4 text-amber-400 shrink-0" />
+              <div className="p-2.5 bg-background rounded-lg border border-border flex items-center gap-2.5 text-xs text-foreground">
+                <Sun className="h-4 w-4 text-primary shrink-0" />
                 <div>
                   <span className="font-semibold block">{outlet.brand} Goods are Ambient Only</span>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-muted-foreground">
                     Non-perishable logistics handled via standard ambient fleet.
                   </span>
                 </div>
               </div>
             )}
 
-            <span className="text-[11px] text-slate-500 block">
+            <span className="text-[11px] text-muted-foreground block">
               {outlet.brand === 'Fresh'
                 ? "Fresh supermarkets can submit max 1 ambient order and 1 chilled order per date."
                 : "Single daily delivery allocated per outlet."}
@@ -317,15 +317,15 @@ export function NewOrderView({
       {/* 3. Product Catalog Grid & Filter Bar */}
       <div className="space-y-4">
         {/* Search & Category Filter Pills */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card p-3 rounded-lg border border-border">
           <div className="relative flex-1 max-w-md">
-            <Search className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
+            <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
             <Input
               type="text"
               placeholder="Search SKUs by name or code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-slate-950 border-slate-700 text-slate-100 pl-9 h-9 text-xs"
+              className="bg-background border-border text-foreground pl-9 h-9 text-xs"
             />
           </div>
 
@@ -337,8 +337,8 @@ export function NewOrderView({
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
                   selectedCategory === cat
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                    ? 'bg-primary text-primary-foreground font-semibold'
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >
                 {cat}
@@ -349,7 +349,7 @@ export function NewOrderView({
 
         {/* Product Cards Grid */}
         {availableCatalog.length === 0 ? (
-          <div className="p-12 text-center bg-slate-900/30 rounded-xl border border-slate-800 text-slate-500 text-xs">
+          <div className="p-12 text-center bg-card rounded-xl border border-border text-muted-foreground text-xs">
             No products found matching the search criteria or selected temperature requirement.
           </div>
         ) : (
@@ -363,25 +363,25 @@ export function NewOrderView({
                   key={product.id}
                   className={`p-3.5 rounded-lg border transition-all flex flex-col justify-between ${
                     isSelected
-                      ? 'bg-slate-900/90 border-sky-500/50 shadow-sm shadow-sky-950/40'
-                      : 'bg-slate-900/50 border-slate-800/80 hover:border-slate-700'
+                      ? 'bg-card border-primary shadow-sm'
+                      : 'bg-card border-border hover:border-foreground/40'
                   }`}
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-mono text-[11px] text-sky-400 font-semibold bg-sky-950/40 px-1.5 py-0.5 rounded border border-sky-800/40">
+                      <span className="font-mono text-[11px] text-foreground font-semibold bg-muted px-1.5 py-0.5 rounded border border-border">
                         {product.sku}
                       </span>
-                      <span className="text-xs font-bold text-slate-200">
+                      <span className="text-xs font-bold text-foreground">
                         LKR {product.unitPrice.toLocaleString()}
                       </span>
                     </div>
 
-                    <h4 className="text-sm font-semibold text-slate-100 line-clamp-1">
+                    <h4 className="text-sm font-semibold text-foreground line-clamp-1">
                       {product.name}
                     </h4>
 
-                    <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                       <span>{product.packSize}</span>
                       <span>•</span>
                       <span>{product.unitWeightKg} kg</span>
@@ -391,14 +391,14 @@ export function NewOrderView({
                   </div>
 
                   {/* Quantity Stepper */}
-                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-800/80">
-                    <span className="text-[11px] text-slate-400">Order Qty</span>
+                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-border">
+                    <span className="text-[11px] text-muted-foreground">Order Qty</span>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => updateQuantity(product.id, -1)}
                         disabled={qty === 0}
-                        className="h-7 w-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center transition-colors"
+                        className="h-7 w-7 rounded bg-muted hover:bg-accent text-foreground disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center transition-colors border border-border"
                       >
                         <Minus className="h-3 w-3" />
                       </button>
@@ -408,12 +408,12 @@ export function NewOrderView({
                         max={999}
                         value={qty}
                         onChange={(e) => setExactQuantity(product.id, parseInt(e.target.value) || 0)}
-                        className="w-12 h-7 rounded bg-slate-950 border border-slate-700 text-center font-mono text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        className="w-12 h-7 rounded bg-background border border-border text-center font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                       <button
                         type="button"
                         onClick={() => updateQuantity(product.id, 1)}
-                        className="h-7 w-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-colors"
+                        className="h-7 w-7 rounded bg-muted hover:bg-accent text-foreground flex items-center justify-center transition-colors border border-border"
                       >
                         <Plus className="h-3 w-3" />
                       </button>
@@ -427,37 +427,37 @@ export function NewOrderView({
       </div>
 
       {/* 4. Sticky Live Cart Summary Bar */}
-      <div className="sticky bottom-4 z-20 bg-slate-900/95 backdrop-blur-md p-4 rounded-xl border border-slate-700 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="sticky bottom-4 z-20 bg-card/95 backdrop-blur-md p-4 rounded-xl border border-border shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg bg-sky-600/20 text-sky-400 flex items-center justify-center">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center border border-border">
               <ShoppingCart className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-[11px] text-slate-400 block">Total Units</span>
-              <span className="text-base font-bold text-slate-100">
+              <span className="text-[11px] text-muted-foreground block">Total Units</span>
+              <span className="text-base font-bold text-foreground">
                 {cartSummary.totalItems} pkgs
               </span>
             </div>
           </div>
 
           <div>
-            <span className="text-[11px] text-slate-400 block">Gross Weight</span>
-            <span className="text-sm font-semibold text-slate-200">
+            <span className="text-[11px] text-muted-foreground block">Gross Weight</span>
+            <span className="text-sm font-semibold text-foreground">
               {cartSummary.totalWeight} kg
             </span>
           </div>
 
           <div>
-            <span className="text-[11px] text-slate-400 block">Gross Volume</span>
-            <span className="text-sm font-semibold text-slate-200">
+            <span className="text-[11px] text-muted-foreground block">Gross Volume</span>
+            <span className="text-sm font-semibold text-foreground">
               {cartSummary.totalVolume} m³
             </span>
           </div>
 
           <div>
-            <span className="text-[11px] text-slate-400 block">Order Value</span>
-            <span className="text-sm font-bold text-emerald-400">
+            <span className="text-[11px] text-muted-foreground block">Order Value</span>
+            <span className="text-sm font-bold text-foreground">
               LKR {cartSummary.totalValue.toLocaleString()}
             </span>
           </div>
@@ -469,7 +469,7 @@ export function NewOrderView({
               variant="ghost"
               size="sm"
               onClick={handleClearCart}
-              className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 h-9 gap-1"
+              className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 h-9 gap-1"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Clear
@@ -479,7 +479,7 @@ export function NewOrderView({
           <Button
             onClick={handleSubmitOrder}
             disabled={cartSummary.totalItems === 0 || isSubmitting}
-            className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs h-10 px-6 gap-2 shadow-lg shadow-emerald-600/30"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-10 px-6 gap-2 shadow-md"
           >
             <span>{isSubmitting ? "Validating & Submitting..." : "Submit Replenishment Order"}</span>
             <ArrowRight className="h-4 w-4" />
@@ -489,3 +489,4 @@ export function NewOrderView({
     </div>
   );
 }
+

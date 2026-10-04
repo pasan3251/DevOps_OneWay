@@ -42,10 +42,10 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
   return (
     <div className="space-y-5">
       {/* 1. Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold text-slate-100">Inbound Deliveries &amp; Receiving</h1>
-          <p className="text-xs text-slate-400">
+          <h1 className="text-xl font-bold text-foreground">Inbound Deliveries &amp; Receiving</h1>
+          <p className="text-xs text-muted-foreground">
             Real-time dock arrival schedule, driver carrier telemetry, and digital receiving sign-off.
           </p>
         </div>
@@ -62,8 +62,8 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
               onClick={() => setFilterType(pill.id)}
               className={`px-3 py-1 rounded-full whitespace-nowrap font-medium transition-colors ${
                 filterType === pill.id
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
               {pill.label}
@@ -74,7 +74,7 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
 
       {/* 2. Shipments Cards */}
       {filtered.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900/30 rounded-xl border border-slate-800 text-slate-500 text-xs">
+        <div className="p-12 text-center bg-card rounded-xl border border-border text-muted-foreground text-xs">
           No inbound shipments matching the selected filter.
         </div>
       ) : (
@@ -90,86 +90,78 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
                 key={delivery.tripStopId}
                 className={`border transition-all ${
                   hasClaims
-                    ? 'bg-amber-950/10 border-amber-500/30'
+                    ? 'bg-card border-border shadow-sm'
                     : isDelivered
-                    ? 'bg-slate-900/60 border-slate-800'
-                    : 'bg-sky-950/20 border-sky-500/40 shadow-md shadow-sky-950/30'
+                    ? 'bg-card border-border'
+                    : 'bg-card border-primary/40 shadow-md'
                 }`}
               >
                 <CardContent className="p-5 space-y-4">
                   {/* Top Row: Cargo Type & Status */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`p-2.5 rounded-xl ${
-                          isChilled
-                            ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        }`}
+                        className={`p-2.5 rounded-xl bg-muted border border-border text-primary`}
                       >
                         {isChilled ? <Snowflake className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-base text-slate-100">
+                          <h3 className="font-bold text-base text-foreground">
                             {isChilled ? 'Chilled Reefer Consignment' : 'Ambient Dry Consignment'}
                           </h3>
                           <Badge
                             variant="outline"
-                            className={`text-xs ${
-                              isDelivered
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                : isInTransit
-                                ? 'bg-sky-500/10 text-sky-400 border-sky-500/30 animate-pulse'
-                                : 'bg-slate-800 text-slate-400'
+                            className={`text-xs bg-muted text-foreground border-border ${
+                              isInTransit ? 'animate-pulse' : ''
                             }`}
                           >
                             {delivery.status}
                           </Badge>
                         </div>
-                        <span className="text-xs text-slate-400 font-mono">
-                          Order #{delivery.orderNumber} • Stop Sequence #{delivery.stopSequence}
+                        <span className="text-xs text-muted-foreground font-mono">
+                          Order #{delivery.orderNumber} • Stop #{delivery.stopSequence}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 text-xs">
                       <div>
-                        <span className="text-slate-500 block text-[11px]">Trip Reference</span>
-                        <span className="font-mono font-medium text-slate-300">{delivery.tripNumber}</span>
+                        <span className="text-muted-foreground block text-[11px]">Trip Reference</span>
+                        <span className="font-mono font-medium text-foreground">{delivery.tripNumber}</span>
                       </div>
                       <div>
-                        <span className="text-slate-500 block text-[11px]">Planned Window</span>
-                        <span className="font-bold text-sky-400">{delivery.plannedArrivalTime || '10:00 AM'}</span>
+                        <span className="text-muted-foreground block text-[11px]">Planned Window</span>
+                        <span className="font-bold text-primary">{delivery.plannedArrivalTime || '10:00 AM'}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Middle Grid: Logistics & Carrier Telematics */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-950/60 rounded-lg border border-slate-800/80 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-background rounded-lg border border-border text-xs">
                     <div>
-                      <span className="text-slate-500 block text-[11px] mb-0.5">Assigned Vehicle</span>
-                      <span className="font-bold text-slate-200">{delivery.vehiclePlate}</span>
-                      <span className="text-[11px] text-slate-400 block mt-0.5">{delivery.vehicleType}</span>
+                      <span className="text-muted-foreground block text-[11px] mb-0.5">Assigned Vehicle</span>
+                      <span className="font-bold text-foreground">{delivery.vehiclePlate}</span>
+                      <span className="text-[11px] text-muted-foreground block mt-0.5">{delivery.vehicleType}</span>
                     </div>
 
                     <div>
-                      <span className="text-slate-500 block text-[11px] mb-0.5">Fleet Driver</span>
-                      <span className="font-bold text-slate-200">{delivery.driverName}</span>
-                      <span className="text-[11px] text-sky-400 block mt-0.5 font-mono">{delivery.driverPhone}</span>
+                      <span className="text-muted-foreground block text-[11px] mb-0.5">Fleet Driver</span>
+                      <span className="font-bold text-foreground">{delivery.driverName}</span>
+                      <span className="text-[11px] text-foreground block mt-0.5 font-mono">{delivery.driverPhone}</span>
                     </div>
 
                     <div>
-                      <span className="text-slate-500 block text-[11px] mb-0.5">Payload Dimensions</span>
-                      <span className="font-bold text-slate-200">{delivery.totalItemsCount} Packages</span>
-                      <span className="text-[11px] text-slate-400 block mt-0.5">{delivery.totalWeightKg} kg Total</span>
+                      <span className="text-muted-foreground block text-[11px] mb-0.5">Payload Dimensions</span>
+                      <span className="font-bold text-foreground">{delivery.totalItemsCount} Packages</span>
+                      <span className="text-[11px] text-muted-foreground block mt-0.5">{delivery.totalWeightKg} kg Total</span>
                     </div>
                   </div>
 
                   {/* Discrepancy Claims Alert Section */}
                   {hasClaims && (
-                    <div className="space-y-2 p-3 bg-amber-950/20 border border-amber-500/30 rounded-lg">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
+                    <div className="space-y-2 p-3 bg-destructive/5 border border-destructive/20 rounded-lg">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
                         <ShieldAlert className="h-4 w-4" />
                         Logged Receiving Discrepancy Claims
                       </div>
@@ -177,16 +169,16 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
                         {delivery.discrepancies?.map((claim) => (
                           <div
                             key={claim.id}
-                            className="flex items-center justify-between text-xs bg-slate-950/60 p-2 rounded border border-amber-900/30 text-slate-300"
+                            className="flex items-center justify-between text-xs bg-background p-2 rounded border border-border text-foreground"
                           >
                             <div className="space-y-0.5">
-                              <span className="font-mono text-amber-300 font-semibold">{claim.claimNumber}</span>
-                              <p className="text-[11px] text-slate-400">
+                              <span className="font-mono text-foreground font-semibold">{claim.claimNumber}</span>
+                              <p className="text-[11px] text-muted-foreground">
                                 {claim.discrepancyType.replace(/_/g, ' ')} • {claim.shortfallQty} units short
                               </p>
-                              {claim.notes && <p className="text-[11px] text-slate-300 italic">&ldquo;{claim.notes}&rdquo;</p>}
+                              {claim.notes && <p className="text-[11px] text-foreground italic">&ldquo;{claim.notes}&rdquo;</p>}
                             </div>
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                            <Badge variant="outline" className="bg-muted text-foreground border-border text-[10px]">
                               {claim.status}
                             </Badge>
                           </div>
@@ -197,15 +189,15 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
 
                   {/* Actions Bar */}
                   <div className="flex items-center justify-between pt-2">
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-muted-foreground">
                       {isDelivered && delivery.proofOfDelivery ? (
-                        <span className="flex items-center gap-1.5 text-emerald-400">
-                          <CheckCircle2 className="h-4 w-4" />
+                        <span className="flex items-center gap-1.5 text-foreground font-medium">
+                          <CheckCircle2 className="h-4 w-4 text-primary" />
                           POD Handover verified by {delivery.proofOfDelivery.storeRepName}
                         </span>
                       ) : isInTransit ? (
-                        <span className="flex items-center gap-1.5 text-sky-400 animate-pulse">
-                          <Clock className="h-4 w-4" />
+                        <span className="flex items-center gap-1.5 text-foreground animate-pulse">
+                          <Clock className="h-4 w-4 text-primary" />
                           Truck currently en route to store dock
                         </span>
                       ) : (
@@ -219,7 +211,7 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedPodDelivery(delivery)}
-                          className="h-8 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
+                          className="h-8 text-xs border-border text-foreground hover:bg-muted gap-1.5"
                         >
                           <FileCheck className="h-3.5 w-3.5" />
                           Inspect POD Receipt
@@ -231,7 +223,7 @@ export function DeliveriesView({ deliveries, onRefresh }: DeliveriesViewProps) {
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedDiscrepancyDelivery(delivery)}
-                          className="h-8 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10 gap-1.5"
+                          className="h-8 text-xs border-border text-foreground hover:bg-muted gap-1.5"
                         >
                           <ShieldAlert className="h-3.5 w-3.5" />
                           Report Discrepancy
