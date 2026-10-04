@@ -1,6 +1,6 @@
 # Waypoint
 
-Delivery planning for Waypoint Fresh, Style, and Tech. This repository contains the frontend sign-in portal, dispatcher daily-planning dashboard, and landing scaffolds for the other roles.
+Delivery planning for Waypoint Fresh, Style, and Tech. This repository contains the frontend sign-in portal, an eight-view dispatcher demo workspace, and landing scaffolds for the other roles.
 
 ## Run locally
 
@@ -37,6 +37,14 @@ The demo day is 3 October 2026. Choose Peliyagoda or Kandy, then use the connect
 - **Order intake** (`#planning`): inspect a paginated requirements table, filter by status/brand, search and sort. Open an order's adjustable details panel to assign it to an existing trip, allocate an eligible new trip, or record a deferral. Assigned orders link to their route; deferred orders can return to the backlog.
 - **Manage fleet** (`#fleet`): filter and inspect vehicles, compare peak per-trip weight/volume, daily trips and estimated fuel. Current Fleet includes distribution charts and route links; Managed Capacities compares trip loads, schedules, checks and fuel after the plan. Workshop vehicles cannot be allocated.
 - **Route planning** (`#routes`): select a route from the schedule, create a trip, assign whole backlog orders, choose compatible vehicles, change departure, reorder/remove stops and resolve checks before review.
+- **Deferrals** (`#deferrals`): search/filter records, inspect the reason and decision note, compare distributions and return eligible orders to the backlog.
+- **Outlets** (`#outlets`): inspect the fixture directory by depot/district/brand, review outlet requirements and open linked orders or routes. Manager, service history and dock details are unavailable.
+- **Calendar** (`#calendar`): view month/agenda layouts, inspect plan departures and create, edit or delete local planning events.
+- **Chat** (`#chat`): filter demo conversations by role, save local messages and mark sample messages read. Messages stay in this browser and are not delivered to people.
+
+Route Planning also includes **Track deliveries** (`#routes/tracking`) and **Manage assigned routes** (`#routes/manage`). Leaflet 1.9.4 maps support interactive illustrative pins; connecting lines show stop sequence, not road directions or factual ETAs. Tracking advances a local simulation, with saved progress invalidated when the route changes; it provides no real GPS or proof of delivery. The window-order suggestion sorts fixture windows and is not an optimizer.
+
+The shell includes an Asia/Colombo clock, the 16:00 cutoff reference, a searchable notification drawer with local read state and navigation actions, an account menu and a persistent scoped light/dark appearance. Calendar, chat, read state, simulated progress and appearance use the separate typed key `waypoint.demo.workspace.v1`; unsuccessful saves preserve drafts and expose retry feedback.
 
 Assignment checks explain incompatible capacity, temperature, access, depot, brand/district, fuel and schedule choices. Carry-over orders are flagged; deferrals require a reason and decision note. Each view reads the same saved plan, and the current view survives reload through its URL fragment. Phone inspection actions reveal and focus their details panel.
 

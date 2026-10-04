@@ -123,3 +123,20 @@ Only `docs/dispatcher-brief.md`, `docs/dispatcher-design-check.md` and `docs/ver
 
 - `DESIGN.md`: `DF6FD55C23E5FD7E76551BB30FE9B9008DA6E01C762B93DC2D35DC9521780805`
 - `.impeccable/design.json`: `9579D8FE4015E5C6F7C9202D8C2AEBAB080FE0AB2EF8FD10D3734C9F89F3F3DC`
+
+## Final dispatcher comparison — 4 October 2026
+
+Compared the final plan, `PRODUCT.md`, incumbent `DESIGN.md`/sidecar, dispatcher shell, workspace stylesheet/state adapter, records, route views/map and final walkthrough script. The supplied `Dispatcher_Dashboards.excalidraw` and ZIP exports extend the incumbent identity. Earlier later-scope references in this document are historical; the eight destinations and three route modes now exist as local demonstrations.
+
+Navy navigation, Public Sans, blue actions, light bordered panels, explicit units, labeled status and demo disclosures remain. Tables and inspectors reuse the operational density; phones stack panels with confined scrolling. The scoped dark variables in `workspace.css` adapt dispatcher surfaces/dialogs and preserve the same hierarchy. They do not replace global normative colors. Existing portal button/type/component descriptions remain portal-scoped and incomplete for the expanded workspace; this pre-existing inventory gap is reported, not promoted into new global rules or repaired without an identity-system request.
+
+Source checks confirm separate validated workspace storage, draft-preserving save failures and route fingerprints containing vehicle, departure and ordered stops. Illustrative Leaflet pins and sequence lines carry an explicit disclaimer; the window suggestion sorts fixture window closes and revalidates. Local messages, events, read state and simulated progress carry no backend/telemetry claim. Unavailable outlet manager, last-served history and dock data remain explicit.
+
+The documentation pass checked all 47 required final capture files for PNG signatures and dimensions, and visually sampled `final-dashboard-1440.png`, `final-chat-320.png`, `final-dark-calendar.png` and `final-route-assignment-map.png`. These show incumbent navigation/chart structure, stacked phone conversations, scoped dark calendar and the illustrative map preview. It did not visually inspect every capture or operate a browser. The independent fresh reviewer checked required evidence and sampled source without browser operation, returned **SHIP** and requested no material fix. The detector's single result is `[]`; runtime evidence and capture names are in `docs/verification.md`.
+
+Automated map captures use intercepted neutral tiles, so no live basemap-delivery claim follows from them. Static images do not prove persistence, mutation success, full accessibility or production readiness. The implementation verification separately covers the connected actions and regressions. No shipping raster asset was introduced; original attached exports remain untouched and local references remain Git-ignored.
+
+Only README and scoped dispatcher documentation were edited in this pass. Normative files remain byte-for-byte preserved, with before/after SHA-256 checks matching:
+
+- `DESIGN.md`: `DF6FD55C23E5FD7E76551BB30FE9B9008DA6E01C762B93DC2D35DC9521780805`
+- `.impeccable/design.json`: `9579D8FE4015E5C6F7C9202D8C2AEBAB080FE0AB2EF8FD10D3734C9F89F3F3DC`

@@ -63,3 +63,21 @@ Implemented: a carry-over notice hands its explicit order ID to Intake; compact 
 Final bounded verdict: **ship at scored-fix scope**. The reviewer scored the sole material finding, fleet-legend overflow with expanded navigation and maximum companion width, **resolved**, with no regression observed from that fix. The refreshed expanded capture uses two fleet columns with Vehicle types spanning the next row; refreshed (390px)/(320px) captures remain readable. This verdict covers the scored containment fix, not whole-surface perfection or later Excalidraw features.
 
 The latest production polish walkthrough passes, including the added expanded-panel legend-containment assertion; lint, TypeScript and build pass. Overview and operations regressions passed before the final CSS-only container reflow. The existing design documents remain byte-for-byte preserved; comparison, hashes and evidence limits are recorded in `docs/dispatcher-design-check.md` and `docs/verification.md`. Review PNGs are evidence rather than shipping raster assets.
+
+## Final dispatcher workspace — 4 October 2026
+
+Mode: Operate, ordinary extension. The supplied `Dispatcher_Dashboards.excalidraw` and matching ZIP exports are the final structural authority, archived locally under `reference/design/final-dispatcher/`. This section supersedes earlier later-scope statements about maps, tracking, outlets, calendar, chat and notifications.
+
+THESIS: Inspect the day's plan, resolve exceptions and rehearse connected dispatch actions with clear local-demo boundaries.
+
+OWN-WORLD: Preserve Waypoint navy navigation, Public Sans, blue actions, bordered operational panels, explicit units and visible synthetic-data disclosures. Scoped dispatcher dark colors extend this identity; global `DESIGN.md` and its sidecar remain unchanged.
+
+STORY: Move through Dashboard, Order Intake, Manage Fleet, Route Planning, Deferrals, Outlets, Calendar and Chat. Inspect records, return a deferral, follow order/vehicle/route links, record a calendar event or local message, and rehearse route progress. Route Planning exposes assignment, simulated tracking and assigned-route management, with persistent hash navigation.
+
+FIRST VIEWPORT: Retain the approved overview/companion composition. Deferrals and Outlets add searchable tables, selected-record inspectors and distributions. Calendar adds month/agenda views and local event CRUD; Chat pairs role-filtered conversations with a message panel. The shell provides notification search/read/actions, account controls, clock/cutoff and appearance. Phones stack panels and confine table/navigation scrolling to their regions.
+
+FORM: The user's final export defines structure within the incumbent world; no replacement identity or shipping raster asset was introduced. Illustrative Leaflet pins and connecting lines convey stop sequence. Simulated arrivals and sample chat/read states never imply real GPS, proof of delivery or remote delivery. Outlet manager, service history and dock data remain unavailable.
+
+SIGNATURE: Existing validated plan mutations still save atomically. The separate typed workspace adapter saves local events, messages, read state, theme and route-fingerprinted progress before acknowledging success; failure preserves drafts and prior state. Suggest window order sorts fixture window closes and runs validation rather than claiming optimization.
+
+FINISH: **SHIP** at the implemented frontend-demo scope. The fresh reviewer sampled source and validated capture evidence without operating a browser; no material fix was requested. Lint/build, two state/domain checks, the final eight-screen/three-mode Playwright walkthrough and five dispatcher regressions pass. Maps in automated captures use deterministic intercepted tiles, so live provider tile delivery remains unverified. The verdict does not establish backend authorization, cross-role synchronization, full accessibility coverage or complete competition readiness. Earlier finish records remain historical evidence; current verification is in `docs/verification.md`.

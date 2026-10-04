@@ -81,7 +81,7 @@ export function Donut({
             </PieChart>
           </ResponsiveContainer>
         ) : (
-          <p className="overview-chart-empty">No vehicles in this category</p>
+          <p className="overview-chart-empty">No {unit} in this category</p>
         )}
         {!solid && total > 0 && (
           <div className="pie-center" aria-hidden="true">

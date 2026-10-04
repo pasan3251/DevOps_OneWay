@@ -9,6 +9,9 @@ import {
   Check,
   CheckCircle2,
   CircleHelp,
+  CalendarDays,
+  Store,
+  MessageSquare,
   ClipboardList,
   Clock3,
   CornerDownRight,
@@ -63,8 +66,28 @@ import { FleetManager } from "./fleet-manager";
 import { RouteSchedule } from "./route-schedule";
 import { proposeTrip } from "./dispatch-operations";
 import "./operations.css";
+import { DeferralRecords, OutletDirectory } from "./workspace-records";
+import { WorkspaceCalendar } from "./workspace-calendar";
+import { WorkspaceChat } from "./workspace-chat";
+import { WorkspaceTools } from "./workspace-tools";
+import { RouteMap } from "./route-map";
+import { RouteViews } from "./route-views";
+import {
+  initialWorkspace,
+  workspaceService,
+  type WorkspaceState,
+} from "./workspace-state";
+import "./workspace.css";
 
-type View = "overview" | "planning" | "fleet" | "routes" | "deferrals";
+type View =
+  | "overview"
+  | "planning"
+  | "fleet"
+  | "routes"
+  | "deferrals"
+  | "outlets"
+  | "calendar"
+  | "chat";
 export function DispatcherDashboard() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -72,6 +95,12 @@ export function DispatcherDashboard() {
   const [depot, setDepot] = useState<Depot>("Peliyagoda");
   const [date, setDate] = useState(DEMO_DATE);
   const [view, setView] = useState<View>("overview");
+  const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  const [routeMode, setRouteMode] = useState<"assign" | "tracking" | "manage">(
+    "assign",
+  );
+  const [mapOrder, setMapOrder] = useState<string | null>(null);
+  const [fleetTab, setFleetTab] = useState("Current fleet");
   const [navCollapsed, setNavCollapsed] = useState(true);
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("All brands");
@@ -101,18 +130,39 @@ export function DispatcherDashboard() {
     }
     const timer = window.setTimeout(() => {
       setSession(active);
-      const destination = window.location.hash.slice(1);
+      const [destination, routeDestination] = window.location.hash
+        .slice(1)
+        .split("/");
       if (
-        ["overview", "planning", "fleet", "routes", "deferrals"].includes(
-          destination,
-        )
+        [
+          "overview",
+          "planning",
+          "fleet",
+          "routes",
+          "deferrals",
+          "outlets",
+          "calendar",
+          "chat",
+        ].includes(destination)
       )
         setView(destination as View);
+      if (
+        destination === "routes" &&
+        (routeDestination === "tracking" || routeDestination === "manage")
+      )
+        setRouteMode(routeDestination);
       try {
         setPlan(planningService.load());
       } catch {
         setFailure(
           "Your saved demo plan couldn’t be read. Changes will replace it only when saved successfully.",
+        );
+      }
+      try {
+        setWorkspace(workspaceService.load());
+      } catch {
+        setFailure(
+          "Your saved calendar, chat and appearance could not be read. They will be replaced only after a successful local save.",
         );
       }
     }, 0);
@@ -158,6 +208,7 @@ export function DispatcherDashboard() {
   const selectedOrders = pending.filter((order) => selected.includes(order.id));
 
   function navigateView(value: View) {
+    if (value === "routes") setRouteMode("assign");
     if (value === "planning") {
       setSelected((current) => current.slice(0, 1));
       setAssignmentErrors([]);
@@ -168,6 +219,40 @@ export function DispatcherDashboard() {
       "",
       `${window.location.pathname}${value === "overview" ? "" : `#${value}`}`,
     );
+  }
+  function navigateRouteMode(value: "assign" | "tracking" | "manage") {
+    setRouteMode(value);
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#routes${value === "assign" ? "" : `/${value}`}`,
+    );
+  }
+  function saveWorkspace(next: WorkspaceState, feedback: string) {
+    try {
+      workspaceService.save(next);
+      setWorkspace(next);
+      setFailure("");
+      setMessage(feedback);
+      return true;
+    } catch {
+      setFailure(
+        "This workspace change could not be saved. Check browser storage and try again; your entries are preserved.",
+      );
+      return false;
+    }
+  }
+  function inspectOrder(id: string) {
+    setQuery(id);
+    setBrand("All brands");
+    setSelected(id ? [id] : []);
+    setAssignmentErrors([]);
+    navigateView("planning");
+    if (id)
+      window.setTimeout(
+        () => document.getElementById(`dispatch-order-${id}`)?.focus(),
+        0,
+      );
   }
   function save(next: Plan, feedback: string) {
     try {
@@ -350,6 +435,7 @@ export function DispatcherDashboard() {
 
   return (
     <div
+      data-theme={workspace.theme}
       className={`dispatch-app dispatch-scroll-shell${navCollapsed ? " navigation-collapsed" : ""}${view === "overview" ? " is-overview" : ""}`}
     >
       <aside className="dispatch-sidebar">
@@ -362,6 +448,9 @@ export function DispatcherDashboard() {
               { id: "fleet", label: "Manage fleet", Icon: Truck },
               { id: "routes", label: "Route planning", Icon: Route },
               { id: "deferrals", label: "Deferrals", Icon: Undo2 },
+              { id: "outlets", label: "Outlets", Icon: Store },
+              { id: "calendar", label: "Calendar", Icon: CalendarDays },
+              { id: "chat", label: "Chat", Icon: MessageSquare },
             ] as const
           ).map(({ id, label, Icon }) => (
             <button
@@ -381,6 +470,28 @@ export function DispatcherDashboard() {
               )}
             </button>
           ))}
+          {view === "routes" && (
+            <div
+              className="dispatch-route-subnav"
+              aria-label="Route planning views"
+            >
+              {(
+                [
+                  ["assign", "Assign routes"],
+                  ["tracking", "Track deliveries"],
+                  ["manage", "Manage assigned routes"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  aria-current={routeMode === id ? "page" : undefined}
+                  onClick={() => navigateRouteMode(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
         <div className="dispatch-sidebar-note">
           <ShieldCheck size={20} aria-hidden="true" />
@@ -422,6 +533,15 @@ export function DispatcherDashboard() {
           </div>
           <div>
             <span className="demo-label">Demo data</span>
+            <WorkspaceTools
+              state={workspace}
+              plan={plan}
+              depot={depot}
+              name={session.name}
+              onSave={saveWorkspace}
+              onNavigate={navigateView}
+              onSignOut={signOut}
+            />
             <button
               className="dispatch-icon-button"
               aria-label="About this demo"
@@ -450,7 +570,13 @@ export function DispatcherDashboard() {
                       ? "Manage fleet"
                       : view === "routes"
                         ? "Route planning"
-                        : "Deferred orders"}
+                        : view === "deferrals"
+                          ? "Deferred orders"
+                          : view === "outlets"
+                            ? "Outlets"
+                            : view === "calendar"
+                              ? "Calendar"
+                              : "Chat"}
               </h1>
               <p>
                 {view === "overview"
@@ -461,7 +587,13 @@ export function DispatcherDashboard() {
                       ? "Find the right vehicle for the next trip."
                       : view === "routes"
                         ? "Build the route. Check the details. Keep deliveries moving."
-                        : "Keep every unserved order visible, with a reason to act on."}
+                        : view === "deferrals"
+                          ? "Keep every unserved order visible, with a reason to act on."
+                          : view === "outlets"
+                            ? "Know each outlet’s requirements before planning its delivery."
+                            : view === "calendar"
+                              ? "Keep dispatch notes and planned departures together."
+                              : "Keep local demo conversations organized by role."}
               </p>
             </div>
             <Button
@@ -526,7 +658,7 @@ export function DispatcherDashboard() {
               {published ? "Published locally" : "Draft plan"}
             </span>
           </div>
-          {view !== "overview" && (
+          {["planning", "fleet", "routes", "deferrals"].includes(view) && (
             <div className="dispatch-summary" aria-label="Plan summary">
               <span>
                 <strong>{depotOrders.length}</strong> orders for this day
@@ -564,7 +696,7 @@ export function DispatcherDashboard() {
               </span>
             </div>
           )}
-          {!isDemoDate ? (
+          {!isDemoDate && !["outlets", "calendar", "chat"].includes(view) ? (
             <section className="dispatch-empty">
               <ClipboardList size={32} aria-hidden="true" />
               <h2>No demo orders for this day</h2>
@@ -644,501 +776,647 @@ export function DispatcherDashboard() {
               onRoute={openRoute}
               errors={assignmentErrors}
             />
+          ) : view === "outlets" ? (
+            <OutletDirectory
+              plan={plan}
+              depot={depot}
+              onOrder={(id) => {
+                setDate(DEMO_DATE);
+                inspectOrder(id);
+              }}
+              onRoute={(id) => {
+                setDate(DEMO_DATE);
+                openRoute(id);
+              }}
+            />
+          ) : view === "calendar" ? (
+            <WorkspaceCalendar
+              state={workspace}
+              plan={plan}
+              depot={depot}
+              date={date}
+              onSave={saveWorkspace}
+              onDate={setDate}
+              onRoute={(id) => {
+                setDate(DEMO_DATE);
+                openRoute(id);
+              }}
+            />
+          ) : view === "chat" ? (
+            <WorkspaceChat
+              state={workspace}
+              depot={depot}
+              onSave={saveWorkspace}
+            />
           ) : view === "routes" ? (
             <div className="route-planning-workspace">
-              <RouteSchedule
-                trips={depotTrips}
-                plan={plan}
-                selectedId={activeTrip?.id}
-                published={published}
-                onSelect={(id) => {
-                  setTripId(id);
-                  setAssignmentErrors([]);
-                }}
-                onCreate={() => setModal("trip")}
-              />
-              <div className="dispatch-planning-grid">
-                <section
-                  className="dispatch-backlog"
-                  tabIndex={0}
-                  role="region"
-                  aria-labelledby="backlog-heading"
+              <div
+                className="route-mode-tabs"
+                aria-label="Route planning modes"
+              >
+                {(
+                  [
+                    ["assign", "Assign routes"],
+                    ["tracking", "Track deliveries"],
+                    ["manage", "Manage assigned routes"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    aria-pressed={routeMode === id}
+                    onClick={() => navigateRouteMode(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  className="dispatch-text-button"
+                  onClick={() => {
+                    setFleetTab("Managed capacities");
+                    navigateView("fleet");
+                  }}
                 >
-                  <div className="dispatch-section-heading">
-                    <div>
-                      <h2 id="backlog-heading">
-                        Order backlog <span>{pending.length}</span>
-                      </h2>
-                      <p>Carry-over orders appear first.</p>
-                    </div>
-                    <span className="small-note">Whole orders only</span>
-                  </div>
-                  <div className="backlog-filters">
-                    <label className="dispatch-search">
-                      <Search size={17} aria-hidden="true" />
-                      <input
-                        aria-label="Search orders"
-                        placeholder="Search outlet or order ID"
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                      />
-                    </label>
-                    <select
-                      aria-label="Filter by brand"
-                      value={brand}
-                      onChange={(event) => setBrand(event.target.value)}
+                  Review capacities
+                </button>
+              </div>
+              {routeMode !== "assign" ? (
+                <RouteViews
+                  mode={routeMode}
+                  plan={plan}
+                  depot={depot}
+                  selectedId={activeTrip?.id}
+                  onSelect={setTripId}
+                  onEdit={(id) => {
+                    setTripId(id);
+                    navigateRouteMode("assign");
+                  }}
+                  state={workspace}
+                  onSave={saveWorkspace}
+                />
+              ) : (
+                <>
+                  <RouteSchedule
+                    trips={depotTrips}
+                    plan={plan}
+                    selectedId={activeTrip?.id}
+                    published={published}
+                    onSelect={(id) => {
+                      setTripId(id);
+                      setAssignmentErrors([]);
+                    }}
+                    onCreate={() => setModal("trip")}
+                  />
+                  <div className="dispatch-planning-grid">
+                    <section
+                      className="dispatch-backlog"
+                      tabIndex={0}
+                      role="region"
+                      aria-labelledby="backlog-heading"
                     >
-                      <option>All brands</option>
-                      <option>Fresh</option>
-                      <option>Style</option>
-                      <option>Tech</option>
-                    </select>
-                  </div>
-                  {pending.some((order) => order.carryOver) && (
-                    <div className="carry-over-note">
-                      <Undo2 size={15} aria-hidden="true" />
-                      {pending.filter((order) => order.carryOver).length}{" "}
-                      carry-over order
-                      {pending.filter((order) => order.carryOver).length === 1
-                        ? ""
-                        : "s"}{" "}
-                      need priority
-                    </div>
-                  )}
-                  {backlog.length ? (
-                    <table className="backlog-table">
-                      <caption className="sr-only">
-                        Unassigned {depot} orders
-                      </caption>
-                      <thead>
-                        <tr>
-                          <th className="order-checkbox">
-                            <input
-                              type="checkbox"
-                              aria-label="Select all visible orders"
-                              disabled={published}
-                              checked={backlog.every((order) =>
-                                selected.includes(order.id),
-                              )}
-                              onChange={(event) => {
-                                setSelected((current) =>
-                                  event.target.checked
-                                    ? Array.from(
-                                        new Set([
-                                          ...current,
-                                          ...backlog.map((order) => order.id),
-                                        ]),
-                                      )
-                                    : current.filter(
-                                        (id) =>
-                                          !backlog.some(
-                                            (order) => order.id === id,
-                                          ),
-                                      ),
-                                );
-                                setAssignmentErrors([]);
-                              }}
-                            />
-                          </th>
-                          <th>Order / outlet</th>
-                          <th className="payload-cell">Payload</th>
-                          <th className="window-cell">Window</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...backlog]
-                          .sort(
-                            (a, b) => Number(b.carryOver) - Number(a.carryOver),
-                          )
-                          .map((order) => (
-                            <tr
-                              key={order.id}
-                              className={
-                                selected.includes(order.id) ? "is-selected" : ""
-                              }
-                            >
-                              <td className="order-checkbox">
+                      <div className="dispatch-section-heading">
+                        <div>
+                          <h2 id="backlog-heading">
+                            Order backlog <span>{pending.length}</span>
+                          </h2>
+                          <p>Carry-over orders appear first.</p>
+                        </div>
+                        <span className="small-note">Whole orders only</span>
+                      </div>
+                      <div className="backlog-filters">
+                        <label className="dispatch-search">
+                          <Search size={17} aria-hidden="true" />
+                          <input
+                            aria-label="Search orders"
+                            placeholder="Search outlet or order ID"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                          />
+                        </label>
+                        <select
+                          aria-label="Filter by brand"
+                          value={brand}
+                          onChange={(event) => setBrand(event.target.value)}
+                        >
+                          <option>All brands</option>
+                          <option>Fresh</option>
+                          <option>Style</option>
+                          <option>Tech</option>
+                        </select>
+                      </div>
+                      {pending.some((order) => order.carryOver) && (
+                        <div className="carry-over-note">
+                          <Undo2 size={15} aria-hidden="true" />
+                          {
+                            pending.filter((order) => order.carryOver).length
+                          }{" "}
+                          carry-over order
+                          {pending.filter((order) => order.carryOver).length ===
+                          1
+                            ? ""
+                            : "s"}{" "}
+                          need priority
+                        </div>
+                      )}
+                      {backlog.length ? (
+                        <table className="backlog-table">
+                          <caption className="sr-only">
+                            Unassigned {depot} orders
+                          </caption>
+                          <thead>
+                            <tr>
+                              <th className="order-checkbox">
                                 <input
                                   type="checkbox"
-                                  aria-label={`Select ${order.id}`}
-                                  id={`dispatch-order-${order.id}`}
-                                  checked={selected.includes(order.id)}
+                                  aria-label="Select all visible orders"
                                   disabled={published}
-                                  onChange={() => toggleOrder(order.id)}
+                                  checked={backlog.every((order) =>
+                                    selected.includes(order.id),
+                                  )}
+                                  onChange={(event) => {
+                                    setSelected((current) =>
+                                      event.target.checked
+                                        ? Array.from(
+                                            new Set([
+                                              ...current,
+                                              ...backlog.map(
+                                                (order) => order.id,
+                                              ),
+                                            ]),
+                                          )
+                                        : current.filter(
+                                            (id) =>
+                                              !backlog.some(
+                                                (order) => order.id === id,
+                                              ),
+                                          ),
+                                    );
+                                    setAssignmentErrors([]);
+                                  }}
                                 />
-                              </td>
-                              <td>
-                                <div className="order-id">
-                                  {order.id}
-                                  {order.carryOver && (
-                                    <span className="carry-over-badge">
-                                      Carry-over
-                                    </span>
-                                  )}
-                                </div>
-                                <strong className="outlet-name">
-                                  {order.outlet}
-                                </strong>
-                                <div className="order-meta">
-                                  <span>{order.district}</span>
-                                  {order.chilled && (
-                                    <span>
-                                      <Snowflake size={12} aria-hidden="true" />
-                                      Chilled
-                                    </span>
-                                  )}
-                                  {order.vanOnly && <span>Van only</span>}
-                                  <span className="inline-window">
-                                    Window: {formatTime(order.window[0])}–
-                                    {formatTime(order.window[1])}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="payload-cell">
-                                {order.kg.toLocaleString()} kg
-                                <span>{order.m3.toFixed(1)} m³</span>
-                              </td>
-                              <td className="window-cell">
-                                {formatTime(order.window[0])}
-                                <span>– {formatTime(order.window[1])}</span>
-                              </td>
+                              </th>
+                              <th>Order / outlet</th>
+                              <th className="payload-cell">Payload</th>
+                              <th className="window-cell">Window</th>
                             </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="backlog-empty">
-                      <CheckCircle2 size={26} aria-hidden="true" />
-                      <h3>
-                        {pending.length
-                          ? "No matching orders"
-                          : "Every order is accounted for"}
-                      </h3>
-                      <p>
-                        {pending.length
-                          ? "Try another outlet, order ID or brand."
-                          : "Review your trips and recorded deferrals before publishing."}
-                      </p>
-                      {pending.length > 0 && (
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setQuery("");
-                            setBrand("All brands");
-                          }}
-                        >
-                          Clear filters
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                  <div className="backlog-actions">
-                    <span>{selectedOrders.length} selected</span>
-                    <button
-                      className="dispatch-text-button"
-                      disabled={!selectedOrders.length || published}
-                      onClick={() => {
-                        setDeferralError("");
-                        setModal("defer");
-                      }}
-                    >
-                      Defer orders
-                    </button>
-                    <Button
-                      className="dispatch-primary"
-                      disabled={
-                        !selectedOrders.length || !activeTrip || published
-                      }
-                      onClick={() => assign()}
-                    >
-                      Assign to trip
-                      <ArrowRight size={16} aria-hidden="true" />
-                    </Button>
-                  </div>
-                  {assignmentErrors.length > 0 && (
-                    <div className="assignment-error" role="alert">
-                      <strong>Assignment blocked</strong>
-                      <ul>
-                        {assignmentErrors.map((error) => (
-                          <li key={error}>{error}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </section>
-                <section
-                  className="dispatch-trip"
-                  aria-labelledby="trip-heading"
-                  tabIndex={0}
-                  role="region"
-                >
-                  <div className="dispatch-section-heading">
-                    <h2 id="trip-heading">Trip workspace</h2>
-                    <button
-                      className="dispatch-text-button"
-                      disabled={published}
-                      onClick={() => setModal("trip")}
-                    >
-                      <Plus size={16} aria-hidden="true" />
-                      Add trip
-                    </button>
-                  </div>
-                  {activeTrip && activeVehicle ? (
-                    <>
-                      <label className="trip-selector">
-                        Selected trip
-                        <select
-                          value={activeTrip.id}
-                          onChange={(event) => {
-                            setTripId(event.target.value);
-                            setAssignmentErrors([]);
-                          }}
-                        >
-                          {depotTrips.map((trip) => (
-                            <option key={trip.id} value={trip.id}>
-                              {trip.id} · {trip.vehicleId} ·{" "}
-                              {trip.orderIds.length} stops
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="trip-vehicle">
-                        <span className="vehicle-icon">
-                          <Truck size={23} aria-hidden="true" />
-                        </span>
-                        <div>
-                          <strong>{activeVehicle.id}</strong>
+                          </thead>
+                          <tbody>
+                            {[...backlog]
+                              .sort(
+                                (a, b) =>
+                                  Number(b.carryOver) - Number(a.carryOver),
+                              )
+                              .map((order) => (
+                                <tr
+                                  key={order.id}
+                                  className={
+                                    selected.includes(order.id)
+                                      ? "is-selected"
+                                      : ""
+                                  }
+                                >
+                                  <td className="order-checkbox">
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`Select ${order.id}`}
+                                      id={`dispatch-order-${order.id}`}
+                                      checked={selected.includes(order.id)}
+                                      disabled={published}
+                                      onChange={() => toggleOrder(order.id)}
+                                    />
+                                  </td>
+                                  <td>
+                                    <div className="order-id">
+                                      {order.id}
+                                      {order.carryOver && (
+                                        <span className="carry-over-badge">
+                                          Carry-over
+                                        </span>
+                                      )}
+                                    </div>
+                                    <strong className="outlet-name">
+                                      <button
+                                        className="route-outlet-link"
+                                        onClick={() => setMapOrder(order.id)}
+                                      >
+                                        {order.outlet}
+                                      </button>
+                                    </strong>
+                                    <div className="order-meta">
+                                      <span>{order.district}</span>
+                                      {order.chilled && (
+                                        <span>
+                                          <Snowflake
+                                            size={12}
+                                            aria-hidden="true"
+                                          />
+                                          Chilled
+                                        </span>
+                                      )}
+                                      {order.vanOnly && <span>Van only</span>}
+                                      <span className="inline-window">
+                                        Window: {formatTime(order.window[0])}–
+                                        {formatTime(order.window[1])}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="payload-cell">
+                                    {order.kg.toLocaleString()} kg
+                                    <span>{order.m3.toFixed(1)} m³</span>
+                                  </td>
+                                  <td className="window-cell">
+                                    {formatTime(order.window[0])}
+                                    <span>– {formatTime(order.window[1])}</span>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="backlog-empty">
+                          <CheckCircle2 size={26} aria-hidden="true" />
+                          <h3>
+                            {pending.length
+                              ? "No matching orders"
+                              : "Every order is accounted for"}
+                          </h3>
                           <p>
-                            {activeVehicle.chilled ? "Refrigerated" : "Ambient"}{" "}
-                            {activeVehicle.type.toLowerCase()} · {depot}
+                            {pending.length
+                              ? "Try another outlet, order ID or brand."
+                              : "Review your trips and recorded deferrals before publishing."}
                           </p>
+                          {pending.length > 0 && (
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setQuery("");
+                                setBrand("All brands");
+                              }}
+                            >
+                              Clear filters
+                            </Button>
+                          )}
                         </div>
+                      )}
+                      <div className="backlog-actions">
+                        <span>{selectedOrders.length} selected</span>
+                        <button
+                          className="dispatch-text-button"
+                          disabled={!selectedOrders.length || published}
+                          onClick={() => {
+                            setDeferralError("");
+                            setModal("defer");
+                          }}
+                        >
+                          Defer orders
+                        </button>
+                        <Button
+                          className="dispatch-primary"
+                          disabled={
+                            !selectedOrders.length || !activeTrip || published
+                          }
+                          onClick={() => assign()}
+                        >
+                          Assign to trip
+                          <ArrowRight size={16} aria-hidden="true" />
+                        </Button>
+                      </div>
+                      {assignmentErrors.length > 0 && (
+                        <div className="assignment-error" role="alert">
+                          <strong>Assignment blocked</strong>
+                          <ul>
+                            {assignmentErrors.map((error) => (
+                              <li key={error}>{error}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </section>
+                    <section
+                      className="dispatch-trip"
+                      aria-labelledby="trip-heading"
+                      tabIndex={0}
+                      role="region"
+                    >
+                      <div className="dispatch-section-heading">
+                        <h2 id="trip-heading">Trip workspace</h2>
                         <button
                           className="dispatch-text-button"
                           disabled={published}
-                          onClick={() => navigateView("fleet")}
+                          onClick={() => setModal("trip")}
                         >
-                          Change
+                          <Plus size={16} aria-hidden="true" />
+                          Add trip
                         </button>
                       </div>
-                      <label className="trip-departure">
-                        Departure
-                        <input
-                          type="time"
-                          aria-label="Trip departure"
-                          value={formatTime(activeTrip.departure)}
-                          disabled={published}
-                          onChange={(event) => {
-                            if (event.target.value) {
-                              const [hours, minutes] = event.target.value
-                                .split(":")
-                                .map(Number);
-                              updateTrip({
-                                ...activeTrip,
-                                departure: hours * 60 + minutes,
-                              });
-                            }
-                          }}
-                        />
-                      </label>
-                      <div className="trip-capacity">
-                        {[
-                          {
-                            label: "Weight",
-                            value: load.kg,
-                            max: activeVehicle.kg,
-                            unit: "kg",
-                          },
-                          {
-                            label: "Volume",
-                            value: load.m3,
-                            max: activeVehicle.m3,
-                            unit: "m³",
-                          },
-                        ].map((metric) => (
-                          <div key={metric.label}>
+                      {activeTrip && activeVehicle ? (
+                        <>
+                          <label className="trip-selector">
+                            Selected trip
+                            <select
+                              value={activeTrip.id}
+                              onChange={(event) => {
+                                setTripId(event.target.value);
+                                setAssignmentErrors([]);
+                              }}
+                            >
+                              {depotTrips.map((trip) => (
+                                <option key={trip.id} value={trip.id}>
+                                  {trip.id} · {trip.vehicleId} ·{" "}
+                                  {trip.orderIds.length} stops
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="trip-vehicle">
+                            <span className="vehicle-icon">
+                              <Truck size={23} aria-hidden="true" />
+                            </span>
                             <div>
-                              <span>{metric.label}</span>
-                              <strong>
-                                {metric.value.toLocaleString(undefined, {
-                                  maximumFractionDigits: 1,
-                                })}{" "}
-                                <span>
-                                  / {metric.max.toLocaleString()} {metric.unit}
-                                </span>
-                              </strong>
+                              <strong>{activeVehicle.id}</strong>
+                              <p>
+                                {activeVehicle.chilled
+                                  ? "Refrigerated"
+                                  : "Ambient"}{" "}
+                                {activeVehicle.type.toLowerCase()} · {depot}
+                              </p>
                             </div>
-                            <meter
-                              min={0}
-                              max={metric.max}
-                              value={Math.min(metric.value, metric.max)}
-                              aria-label={`${metric.label} used`}
+                            <button
+                              className="dispatch-text-button"
+                              disabled={published}
+                              onClick={() => navigateView("fleet")}
+                            >
+                              Change
+                            </button>
+                          </div>
+                          <label className="trip-departure">
+                            Departure
+                            <input
+                              type="time"
+                              aria-label="Trip departure"
+                              value={formatTime(activeTrip.departure)}
+                              disabled={published}
+                              onChange={(event) => {
+                                if (event.target.value) {
+                                  const [hours, minutes] = event.target.value
+                                    .split(":")
+                                    .map(Number);
+                                  updateTrip({
+                                    ...activeTrip,
+                                    departure: hours * 60 + minutes,
+                                  });
+                                }
+                              }}
                             />
-                            <p>
-                              {Math.round((metric.value / metric.max) * 100)}%
-                              of vehicle capacity
+                          </label>
+                          <div className="allocation-map">
+                            <h3>Route preview</h3>
+                            <RouteMap
+                              depot={depot}
+                              trips={[activeTrip]}
+                              selectedTrip={activeTrip.id}
+                              focusedOrder={mapOrder}
+                              onOrder={setMapOrder}
+                            />
+                            <button
+                              className="dispatch-text-button"
+                              disabled={
+                                published || activeTrip.orderIds.length < 2
+                              }
+                              onClick={() => {
+                                const orderIds = [...activeTrip.orderIds].sort(
+                                  (a, b) =>
+                                    orders.find((o) => o.id === a)!.window[1] -
+                                    orders.find((o) => o.id === b)!.window[1],
+                                );
+                                const candidate = { ...activeTrip, orderIds };
+                                const checks = validateTrip(candidate, {
+                                  ...plan,
+                                  trips: plan.trips.map((t) =>
+                                    t.id === candidate.id ? candidate : t,
+                                  ),
+                                });
+                                if (checks.length) {
+                                  setAssignmentErrors(checks);
+                                  return;
+                                }
+                                updateTrip(candidate);
+                              }}
+                            >
+                              Suggest window order
+                            </button>
+                            <p className="workspace-note">
+                              Demo suggestion sorts by window close and
+                              validates the result. This is not road
+                              optimization.
                             </p>
                           </div>
-                        ))}
-                      </div>
-                      <div className="trip-stops-heading">
-                        <h3>Delivery sequence</h3>
-                        <span>{activeTrip.orderIds.length} stops</span>
-                      </div>
-                      {activeTrip.orderIds.length ? (
-                        <ol className="trip-stops">
-                          {stopTimes(activeTrip).map((stop, index) => (
-                            <li key={stop.order.id}>
-                              <span className="stop-number">{index + 1}</span>
-                              <div>
-                                <strong>{stop.order.outlet}</strong>
+                          <div className="trip-capacity">
+                            {[
+                              {
+                                label: "Weight",
+                                value: load.kg,
+                                max: activeVehicle.kg,
+                                unit: "kg",
+                              },
+                              {
+                                label: "Volume",
+                                value: load.m3,
+                                max: activeVehicle.m3,
+                                unit: "m³",
+                              },
+                            ].map((metric) => (
+                              <div key={metric.label}>
+                                <div>
+                                  <span>{metric.label}</span>
+                                  <strong>
+                                    {metric.value.toLocaleString(undefined, {
+                                      maximumFractionDigits: 1,
+                                    })}{" "}
+                                    <span>
+                                      / {metric.max.toLocaleString()}{" "}
+                                      {metric.unit}
+                                    </span>
+                                  </strong>
+                                </div>
+                                <meter
+                                  min={0}
+                                  max={metric.max}
+                                  value={Math.min(metric.value, metric.max)}
+                                  aria-label={`${metric.label} used`}
+                                />
                                 <p>
-                                  {stop.order.id} · {stop.order.kg} kg
+                                  {Math.round(
+                                    (metric.value / metric.max) * 100,
+                                  )}
+                                  % of vehicle capacity
                                 </p>
-                                <span>
-                                  {formatTime(stop.start)} –{" "}
-                                  {formatTime(stop.end)}{" "}
-                                  <span className="small-note">
-                                    demo estimate
+                              </div>
+                            ))}
+                          </div>
+                          <div className="trip-stops-heading">
+                            <h3>Delivery sequence</h3>
+                            <span>{activeTrip.orderIds.length} stops</span>
+                          </div>
+                          {activeTrip.orderIds.length ? (
+                            <ol className="trip-stops">
+                              {stopTimes(activeTrip).map((stop, index) => (
+                                <li key={stop.order.id}>
+                                  <span className="stop-number">
+                                    {index + 1}
                                   </span>
-                                </span>
-                              </div>
-                              <div className="stop-actions">
-                                <button
-                                  aria-label={`Move ${stop.order.id} earlier`}
-                                  disabled={published || index === 0}
-                                  onClick={() => {
-                                    const ids = [...activeTrip.orderIds];
-                                    [ids[index - 1], ids[index]] = [
-                                      ids[index],
-                                      ids[index - 1],
-                                    ];
-                                    updateTrip({
-                                      ...activeTrip,
-                                      orderIds: ids,
-                                    });
-                                  }}
-                                >
-                                  <ArrowUp size={14} aria-hidden="true" />
-                                </button>
-                                <button
-                                  aria-label={`Move ${stop.order.id} later`}
-                                  disabled={
-                                    published ||
-                                    index === activeTrip.orderIds.length - 1
-                                  }
-                                  onClick={() => {
-                                    const ids = [...activeTrip.orderIds];
-                                    [ids[index + 1], ids[index]] = [
-                                      ids[index],
-                                      ids[index + 1],
-                                    ];
-                                    updateTrip({
-                                      ...activeTrip,
-                                      orderIds: ids,
-                                    });
-                                  }}
-                                >
-                                  <ArrowDown size={14} aria-hidden="true" />
-                                </button>
-                                <button
-                                  aria-label={`Remove ${stop.order.id} from trip`}
-                                  disabled={published}
-                                  onClick={() =>
-                                    updateTrip({
-                                      ...activeTrip,
-                                      orderIds: activeTrip.orderIds.filter(
-                                        (id) => id !== stop.order.id,
+                                  <div>
+                                    <strong>{stop.order.outlet}</strong>
+                                    <p>
+                                      {stop.order.id} · {stop.order.kg} kg
+                                    </p>
+                                    <span>
+                                      {formatTime(stop.start)} –{" "}
+                                      {formatTime(stop.end)}{" "}
+                                      <span className="small-note">
+                                        demo estimate
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <div className="stop-actions">
+                                    <button
+                                      aria-label={`Move ${stop.order.id} earlier`}
+                                      disabled={published || index === 0}
+                                      onClick={() => {
+                                        const ids = [...activeTrip.orderIds];
+                                        [ids[index - 1], ids[index]] = [
+                                          ids[index],
+                                          ids[index - 1],
+                                        ];
+                                        updateTrip({
+                                          ...activeTrip,
+                                          orderIds: ids,
+                                        });
+                                      }}
+                                    >
+                                      <ArrowUp size={14} aria-hidden="true" />
+                                    </button>
+                                    <button
+                                      aria-label={`Move ${stop.order.id} later`}
+                                      disabled={
+                                        published ||
+                                        index === activeTrip.orderIds.length - 1
+                                      }
+                                      onClick={() => {
+                                        const ids = [...activeTrip.orderIds];
+                                        [ids[index + 1], ids[index]] = [
+                                          ids[index],
+                                          ids[index + 1],
+                                        ];
+                                        updateTrip({
+                                          ...activeTrip,
+                                          orderIds: ids,
+                                        });
+                                      }}
+                                    >
+                                      <ArrowDown size={14} aria-hidden="true" />
+                                    </button>
+                                    <button
+                                      aria-label={`Remove ${stop.order.id} from trip`}
+                                      disabled={published}
+                                      onClick={() =>
+                                        updateTrip({
+                                          ...activeTrip,
+                                          orderIds: activeTrip.orderIds.filter(
+                                            (id) => id !== stop.order.id,
+                                          ),
+                                        })
+                                      }
+                                    >
+                                      <X size={14} aria-hidden="true" />
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ol>
+                          ) : (
+                            <div className="trip-empty">
+                              <CornerDownRight size={23} aria-hidden="true" />
+                              <p>
+                                Select backlog orders, then assign them to this
+                                trip.
+                              </p>
+                              <button
+                                className="dispatch-text-button"
+                                onClick={() =>
+                                  save(
+                                    {
+                                      ...plan,
+                                      trips: plan.trips.filter(
+                                        (trip) => trip.id !== activeTrip.id,
                                       ),
-                                    })
-                                  }
-                                >
-                                  <X size={14} aria-hidden="true" />
-                                </button>
-                              </div>
-                            </li>
-                          ))}
-                        </ol>
+                                    },
+                                    "Empty trip removed.",
+                                  )
+                                }
+                              >
+                                Remove empty trip
+                              </button>
+                            </div>
+                          )}
+                          <div
+                            className={`trip-checks ${issues.length ? "has-issues" : ""}`}
+                          >
+                            <div>
+                              <ShieldCheck size={18} aria-hidden="true" />
+                              <strong>
+                                {issues.length
+                                  ? `${issues.length} check${issues.length === 1 ? "" : "s"} to resolve`
+                                  : "Ready for review"}
+                              </strong>
+                            </div>
+                            {issues.length ? (
+                              <ul>
+                                {issues.map((issue) => (
+                                  <li key={issue}>{issue}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p>
+                                Capacity, temperature, access and schedule
+                                checks pass for this demo trip.
+                              </p>
+                            )}
+                          </div>
+                          <div className="trip-estimates">
+                            <span>
+                              {tripMinutes(activeTrip)} min allocation budget
+                            </span>
+                            <span>
+                              {fuelLitres(activeTrip).toFixed(1)} L demo fuel
+                            </span>
+                          </div>
+                        </>
                       ) : (
                         <div className="trip-empty">
-                          <CornerDownRight size={23} aria-hidden="true" />
+                          <Truck size={32} aria-hidden="true" />
+                          <h3>Start this depot’s plan</h3>
                           <p>
-                            Select backlog orders, then assign them to this
-                            trip.
+                            Create a trip, choose an available vehicle, and
+                            assign the first orders.
                           </p>
-                          <button
-                            className="dispatch-text-button"
-                            onClick={() =>
-                              save(
-                                {
-                                  ...plan,
-                                  trips: plan.trips.filter(
-                                    (trip) => trip.id !== activeTrip.id,
-                                  ),
-                                },
-                                "Empty trip removed.",
-                              )
-                            }
+                          <Button
+                            className="dispatch-primary"
+                            onClick={() => setModal("trip")}
                           >
-                            Remove empty trip
-                          </button>
+                            <Plus size={16} aria-hidden="true" />
+                            Create first trip
+                          </Button>
                         </div>
                       )}
-                      <div
-                        className={`trip-checks ${issues.length ? "has-issues" : ""}`}
-                      >
-                        <div>
-                          <ShieldCheck size={18} aria-hidden="true" />
-                          <strong>
-                            {issues.length
-                              ? `${issues.length} check${issues.length === 1 ? "" : "s"} to resolve`
-                              : "Ready for review"}
-                          </strong>
-                        </div>
-                        {issues.length ? (
-                          <ul>
-                            {issues.map((issue) => (
-                              <li key={issue}>{issue}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>
-                            Capacity, temperature, access and schedule checks
-                            pass for this demo trip.
-                          </p>
-                        )}
-                      </div>
-                      <div className="trip-estimates">
-                        <span>
-                          {tripMinutes(activeTrip)} min allocation budget
-                        </span>
-                        <span>
-                          {fuelLitres(activeTrip).toFixed(1)} L demo fuel
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="trip-empty">
-                      <Truck size={32} aria-hidden="true" />
-                      <h3>Start this depot’s plan</h3>
-                      <p>
-                        Create a trip, choose an available vehicle, and assign
-                        the first orders.
-                      </p>
-                      <Button
-                        className="dispatch-primary"
-                        onClick={() => setModal("trip")}
-                      >
-                        <Plus size={16} aria-hidden="true" />
-                        Create first trip
-                      </Button>
-                    </div>
-                  )}
-                </section>
-              </div>
+                    </section>
+                  </div>
+                </>
+              )}
             </div>
           ) : view === "fleet" ? (
             <FleetManager
+              key={fleetTab}
+              initialTab={fleetTab}
               plan={plan}
               depot={depot}
               activeTrip={activeTrip}
@@ -1169,73 +1447,23 @@ export function DispatcherDashboard() {
               }}
             />
           ) : (
-            <section className="dispatch-deferrals">
-              <div className="dispatch-section-heading">
-                <h2>
-                  Recorded deferrals <span>{deferred.length}</span>
-                </h2>
-                <span className="small-note">
-                  Pending a future operating run
-                </span>
-              </div>
-              {deferred.length ? (
-                deferred.map((order) => {
-                  const entry = plan.deferrals.find(
-                    (item) => item.orderId === order.id,
-                  )!;
-                  return (
-                    <article className="deferral-row" key={order.id}>
-                      <div>
-                        <span className="order-id">
-                          {order.id}
-                          {order.carryOver && (
-                            <span className="carry-over-badge">
-                              Repeated deferral
-                            </span>
-                          )}
-                        </span>
-                        <h3>{order.outlet}</h3>
-                        <strong>{entry.reason}</strong>
-                        <p>{entry.note}</p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        disabled={published}
-                        onClick={() =>
-                          save(
-                            {
-                              ...plan,
-                              deferrals: plan.deferrals.filter(
-                                (item) => item.orderId !== order.id,
-                              ),
-                            },
-                            `${order.id} returned to the backlog.`,
-                          )
-                        }
-                      >
-                        <Undo2 size={16} aria-hidden="true" />
-                        Return to backlog
-                      </Button>
-                    </article>
-                  );
-                })
-              ) : (
-                <div className="backlog-empty">
-                  <CheckCircle2 size={30} aria-hidden="true" />
-                  <h3>No deferred orders</h3>
-                  <p>
-                    If an order cannot be served, select it in the backlog and
-                    record the reason here.
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => navigateView("planning")}
-                  >
-                    Go to daily plan
-                  </Button>
-                </div>
-              )}
-            </section>
+            <DeferralRecords
+              plan={plan}
+              depot={depot}
+              published={published}
+              onIntake={inspectOrder}
+              onReturn={(orderId) =>
+                save(
+                  {
+                    ...plan,
+                    deferrals: plan.deferrals.filter(
+                      (entry) => entry.orderId !== orderId,
+                    ),
+                  },
+                  orderId + " returned to the backlog.",
+                )
+              }
+            />
           )}
           <footer className="dispatch-footer">
             <span>
@@ -1252,7 +1480,7 @@ export function DispatcherDashboard() {
           if (!open) setModal(null);
         }}
       >
-        <DialogContent className="dispatch-dialog">
+        <DialogContent className="dispatch-dialog" data-theme={workspace.theme}>
           <DialogHeader>
             <DialogTitle>
               {modal === "trip"

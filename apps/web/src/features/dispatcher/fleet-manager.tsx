@@ -24,6 +24,7 @@ import {
 } from "./planning";
 
 type Props = {
+  initialTab?: string;
   plan: Plan;
   depot: Depot;
   activeTrip?: Trip;
@@ -33,6 +34,7 @@ type Props = {
   onCreate: (vehicleId: string) => void;
 };
 export function FleetManager({
+  initialTab = "Current fleet",
   plan,
   depot,
   activeTrip,
@@ -41,7 +43,7 @@ export function FleetManager({
   onRoute,
   onCreate,
 }: Props) {
-  const [tab, setTab] = useState("Current fleet");
+  const [tab, setTab] = useState(initialTab);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("All types");
   const [status, setStatus] = useState("All statuses");

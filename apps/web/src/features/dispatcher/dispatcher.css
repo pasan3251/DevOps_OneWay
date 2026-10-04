@@ -122,7 +122,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
+  background: var(--background);
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
@@ -185,7 +185,7 @@
   flex-shrink: 0;
 }
 .dispatch-primary:hover {
-  background: #104e88;
+  background: var(--primary-hover, #104e88);
 }
 .dispatch-controls {
   display: flex;
@@ -216,7 +216,7 @@
 .dispatch-dialog-form select,
 .dispatch-dialog-form input,
 .dispatch-dialog-form textarea {
-  background: white;
+  background: var(--background);
   border: 1px solid var(--input);
   border-radius: 8px;
   height: 40px;
@@ -285,7 +285,7 @@
 .dispatch-trip,
 .dispatch-fleet,
 .dispatch-deferrals {
-  background: white;
+  background: var(--background);
   border: 1px solid var(--border);
   border-radius: 12px;
   min-width: 0;
@@ -380,7 +380,7 @@
   font-variant-numeric: tabular-nums;
 }
 .backlog-table th {
-  background: #f8fafc;
+  background: var(--muted);
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 500;
@@ -393,10 +393,10 @@
   font-size: 12px;
 }
 .backlog-table tr.is-selected td {
-  background: #eef4fa;
+  background: var(--secondary);
 }
 .backlog-table tbody tr:hover td {
-  background: #f5f8fc;
+  background: var(--muted);
 }
 .backlog-table th.order-checkbox,
 .backlog-table td.order-checkbox {
@@ -512,7 +512,7 @@
   gap: 11px;
   align-items: center;
   padding: 18px 22px;
-  background: #f8fafc;
+  background: var(--muted);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }

@@ -1,6 +1,11 @@
 async (page) => {
+  await page.route("**://**tile.openstreetmap.org/**", route => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64") }));
   const assert = (value, message) => { if (!value) throw new Error(message); };
-  await page.goto("http://127.0.0.1:3000/workspace/dispatcher");
+  await page.goto("http://127.0.0.1:3000/login");
+  await page.evaluate(() => { localStorage.removeItem("waypoint.demo.dispatch.v1"); localStorage.removeItem("waypoint.demo.workspace.v1"); localStorage.removeItem("waypoint.demo.session.v1"); sessionStorage.removeItem("waypoint.demo.session.v1"); });
+  await page.reload();
+  await page.getByRole("button", {name:/Dispatcher Planning office/}).click();
+  await page.getByRole("button", {name:"Sign in",exact:true}).click();
   await page.getByRole("heading",{name:"Today’s overview",exact:true}).waitFor();
   await page.getByRole("navigation", {name:"Dispatcher navigation"}).getByRole("button",{name:"Route planning",exact:true}).click();
   await page.getByRole("heading",{name:"Route planning",exact:true}).waitFor();

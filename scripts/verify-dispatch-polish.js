@@ -1,4 +1,5 @@
 async (page) => {
+  await page.route("**://**tile.openstreetmap.org/**", route => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64") }));
   const assert = (value, message) => {
     if (!value) throw new Error(message);
   };
@@ -6,7 +7,7 @@ async (page) => {
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("http://127.0.0.1:3000/login");
   await page.evaluate(() => {
-    localStorage.removeItem("waypoint.demo.dispatch.v1");
+    localStorage.removeItem("waypoint.demo.dispatch.v1"); localStorage.removeItem("waypoint.demo.workspace.v1");
     localStorage.removeItem("waypoint.demo.session.v1");
     sessionStorage.removeItem("waypoint.demo.session.v1");
   });
