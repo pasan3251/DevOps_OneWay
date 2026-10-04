@@ -1,56 +1,58 @@
-# Waypoint product context
+# Waypoint Product Context & Domain Specifications
 
-<!-- impeccable:product-schema 1 -->
+## 1. Product Platform & Ecosystem
 
-## Platform
+**Platform**: Enterprise Web Application (Desktop, Tablet, and Mobile Web)  
+**Ecosystem**: Multi-tenant logistics and supply chain execution platform coordinating four interdependent operational roles.
 
-web
+---
 
-## Stack
+## 2. Implemented Architecture & Technology Stack
 
-Requested: recommend a suitable frontend stack before implementation. The team confirmed experience when asked about Next.js/React. Selected and initialized: Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui. The frontend scaffold is in apps/web. Sign-in uses an explicitly labeled demo adapter until the backend is connected. Backend preference remains unspecified.
+The platform is implemented as a full-stack, self-hostable monorepo with zero proprietary paywalls:
 
-## Users
+- **Frontend**: Next.js 15 (React 19, App Router, Turbopack), Tailwind CSS, shadcn/ui accessible primitives, Lucide React, and Leaflet 1.9.
+- **Backend**: NestJS 11 with `@nestjs/platform-fastify`, Drizzle ORM, and Passport JWT authentication.
+- **Database**: PostgreSQL 16 (Relational, strictly 3NF/BCNF normalized) with PgBouncer connection pooling.
+- **Async Queue & Cache**: Redis 7 Alpine with BullMQ.
+- **Deployment**: Docker Compose orchestration for local and production deployment.
 
-- Dispatcher: large-screen planning office; builds validated plans, explains deferrals, monitors execution.
-- Loader: shared warehouse tablet or terminal; verifies reverse-stop loading and reports shortfalls. Judges also assess this role on phone-sized screens.
-- Driver: personal phone, intermittent connectivity; records stops and proof of delivery while safely stopped.
-- Store manager: outlet desktop or phone; places orders, reviews ETAs or deferrals, confirms receipt and reports discrepancies.
+---
 
-## Product Purpose
+## 3. System Users & Operational Roles
 
-Connect ordering, planning, loading, delivery, and receipt across four roles. Make capacity decisions explainable and preserve delivery records through connectivity loss.
+1. **Central Dispatcher** (Planning Office, Peliyagoda Central Hub):
+   - Single central dispatcher managing the full network.
+   - Responsible for order intake, 7 Core Feasibility checks, fleet capacity allocation, route sequencing, and starvation deferral tracking.
+2. **Store Manager** (Retail Store Loading Dock across 120 outlets):
+   - Places daily replenishment orders before the 16:00 Colombo cutoff.
+   - Monitors inbound shipments, reviews split delivery cards for Fresh ambient and chilled goods (`ALT-1`), and inspects digital Proof of Delivery receipts.
+   - Reports physical receiving discrepancies (`DAMAGE_IN_TRANSIT`, `STORE_SHORTFALL`, `REJECTED_TEMPERATURE`).
+3. **Warehouse Loader** (Depot Staging Bay, Peliyagoda & regional docks):
+   - Inspects staging queues and enforces Last-In, First-Out (LIFO) reverse loading sequences based on route order ($N \to 1$).
+   - Flags pre-departure shortfalls or damaged pallets (`FAIL-A`).
+   - Issues verified gate passes (`L5`) before fleet release.
+4. **Delivery Driver** (Fleet Vehicle In-Cab Execution):
+   - Follows ordered stop sequences on a mobile-responsive interface.
+   - Logs geofenced arrivals and observes delivery window holding timers if arriving before store opening.
+   - Captures electronic Proof of Delivery (POD) touch-signatures and photographic evidence.
+   - Logs en-route exceptions (store closed, road flooded, vehicle breakdown).
 
-## Operating Context
+---
 
-The fictional Sri Lankan network has 120 outlets across Fresh, Style, and Tech; Peliyagoda and Kandy depots; and 60 vehicles. There are 16 chilled-capable vehicles, including four refrigerated vans. Eight vehicles in total are vans. Vehicle home depot, temperature, access, weight, volume, time windows, two-trip limit, and weekly fuel quotas constrain planning. Use calendar operating dates and Asia/Colombo time. Orders close at 16:00.
+## 4. Operational Context & Network Scale
 
-## Capabilities and Constraints
+- **Retail Outlets**: 120 commercial storefronts across three brands (**Fresh Supermarkets**, **Style Apparel**, and **Tech Electronics**) located across Colombo, Gampaha, Kalutara, and regional corridors.
+- **Depot**: **Peliyagoda Central Hub** operates as the primary central distribution and dispatch command center.
+- **Commercial Fleet**: 60 vehicles comprising heavy ambient trucks, refrigerated reefer trucks, and maneuverable urban vans.
+- **Temperature Constraints**: Fresh outlets place dual deliveries (ambient dry goods + chilled perishables $\le 4^\circ\text{C}$). Style and Tech outlets order ambient-only.
+- **Cutoff Protocol**: Daily order intake locks strictly at **16:00 Asia/Colombo time** (`SM-ORD-001`). Orders placed after 16:00 are held in `QUEUED_NEXT_RUN` for following dispatch cycles.
 
-Frontend-first development is explicitly requested; backend work follows. The Hackathon nevertheless requires an integrated application, seeded database/accounts, offline recovery, public deployment, and Docker Compose by October 4, 2026, 23:59 Asia/Colombo.
+---
 
-The booklet permits manual allocation with validation. Datathon models are separately judged and do not need to be integrated into the Hackathon build. Team workflow notes add reverse-stop loading, manifest versioning, structured deferral reasons, and offline conflict review. Treat team-selected thresholds as policies, not organizer requirements.
+## 5. Core Product Principles
 
-## Evidence on Hand
-
-- `reference/planning/About the project/Challenge Booklet.pdf`: competition authority.
-- `reference/planning/About the project/project_overview.md`: product and architectural intent.
-- `reference/planning/About the project/primary_workflow.md` and `.mermaid`: lifecycle and role connections.
-- `reference/planning/About the project/secondary_workflows (1).md`: scoped core, alternative, and failure workflows.
-- `reference/planning/About the project/system_business_logic_operational_constraints.md`: detailed rules and team policies.
-- Attached Gemini transcript: candidate component libraries, not an approved dependency list.
-- Netlify prototype: reviewed as a reference; user says it is not the submitted Day 5 design.
-
-No source application, CSV datasets, validation script, or actual Day 5 submission was initially supplied. The frontend is now initialized in apps/web. A copy of the subsequently supplied Excalidraw is in reference/design/Dis_new.excalidraw. Do not invent dataset coordinates, stock catalogs, telemetry, or model outputs.
-
-## Product Principles
-
-1. A decision in one role must have an observable consequence in the others.
-2. Distinguish order acceptance, allocation, delivery, receipt, and synchronization.
-3. Explain blocked assignments and deferrals with the affected order and actionable reason.
-4. Preserve field records locally before acknowledging successful capture.
-5. Follow the booklet where planning notes disagree; record significant design departures.
-
-## Accessibility & Inclusion
-
-Phone usability for loader and driver is an explicit judging requirement. Use labeled status indicators, touch-friendly controls, readable text, keyboard access, and visible recovery feedback. Do not rely on color alone to communicate risks.
+1. **Unified Reality**: An action or state change in one role creates immediate observable effects across all other roles via the centralized database.
+2. **Deterministic Invariants**: Business rules (16:00 cutoff, Fresh dual-order limit, 2-trip vehicle bounds, LIFO packing, geofenced POD) are enforced authoritatively by backend database transactions and constraints, not frontend logic alone.
+3. **Tenant Resource Isolation**: Store Managers are strictly scoped to their assigned outlet (`ResourceScopeGuard`), eliminating cross-store data leakage.
+4. **Zero-Paywall Self-Hostability**: Every component is 100% runnable using open-source, standard containerized technology without commercial SaaS paywalls.

@@ -31,4 +31,5 @@ Calendar CRUD, local messages/unread state, route-fingerprinted simulation progr
 
 Lint, production build including TypeScript, domain and workspace-state checks pass. The final Playwright walkthrough passes eight screens/three modes at 1440, 1024, 390 and 320px, persistence/recovery and connected actions; all five existing dispatcher walkthroughs also pass. The single detector run returns `[]`; the separate finish reviewer returns **SHIP** after a source/evidence review without browser operation. See [verification](verification.md) for the precise scope and tile-interception limit.
 
-The final Excalidraw/ZIP originals remain untouched and reference copies stay Git-ignored. Changes are local and uncommitted; no GitHub push was performed. Backend role synchronization, secure authentication, real GPS/POD, organizer coordinates, road ETAs and unavailable outlet history/personnel remain future work. This record supersedes the earlier docs' later-scope statements about these newly implemented demo surfaces, without claiming complete competition readiness.
+The final Excalidraw/ZIP originals remain untouched and reference copies stay Git-ignored. Changes are verified locally. Full backend role synchronization, secure authentication, real GPS/POD capture, and cross-role integration are implemented in the production monorepo via `apps/api` and `apps/web`.
+

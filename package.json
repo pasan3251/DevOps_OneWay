@@ -4,10 +4,20 @@
   "private": true,
   "scripts": {
     "dev": "npm --prefix apps/web run dev",
-    "build": "npm --prefix apps/web run build",
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev:web": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build && npm --prefix apps/api run build",
+    "build:api": "npm --prefix apps/api run build",
+    "build:web": "npm --prefix apps/web run build",
     "start": "npm --prefix apps/web run start",
+    "start:api": "npm --prefix apps/api run start:prod",
     "lint": "npm --prefix apps/web run lint",
     "typecheck": "npm --prefix apps/web run typecheck",
-    "setup": "npm --prefix apps/web ci"
+    "setup": "npm --prefix apps/web ci",
+    "setup:api": "npm --prefix apps/api install",
+    "test:api": "npm --prefix apps/api test",
+    "db:generate": "npm --prefix apps/api run db:generate",
+    "db:migrate": "npm --prefix apps/api run db:migrate",
+    "db:seed": "npm --prefix apps/api run db:seed"
   }
 }

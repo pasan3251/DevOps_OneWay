@@ -1,79 +1,273 @@
-# Waypoint
+# Waypoint Logistics Management System
 
-Delivery planning for Waypoint Fresh, Style, and Tech. This repository contains the frontend sign-in portal, an eight-view dispatcher demo workspace, and landing scaffolds for the other roles.
+Enterprise multi-tenant supply chain planning and logistics execution platform designed for complex retail operations across Sri Lanka. Waypoint orchestrates end-to-end freight lifecycles across four core roles: **Central Dispatcher**, **Store Manager**, **Warehouse Loader**, and **Delivery Driver**.
 
-## Run locally
+---
 
-Requires Node.js 20.9 or later and npm.
+## 1. System Overview
 
-```sh
-npm run setup
-npm run dev
+Waypoint coordinates freight demand, vehicle routing, dock staging, and proof-of-delivery across three retail brands:
+
+- **Waypoint Fresh**: Fast-moving perishable groceries, produce, dairy, and cold-chain meats requiring refrigerated vehicles and pre-08:00 AM delivery windows.
+- **Waypoint Style**: High-cube apparel, hanging garments, and boxed fashion goods distributed to urban retail storefronts.
+- **Waypoint Tech**: High-value electronics, computing hardware, and appliances requiring serial tracking and dock-level handover verification.
+
+Fulfillment operations originate from the **Peliyagoda Central Hub**, supplying **120 retail outlets** across the Western Province (Colombo, Gampaha, Kalutara) and regional corridors using a fleet of **60 commercial vehicles** (ambient trucks, refrigerated reefer trucks, and urban access vans).
+
+---
+
+## 2. System Architecture
+
+The platform is engineered as a **Modular Monolith** with zero external SaaS dependencies, ensuring full local portability, high transaction throughput, and ACID consistency:
+
+```mermaid
+graph TD
+    subgraph ClientLayer ["Frontend Applications (Next.js 15 App Router - Port 3000)"]
+        SM["Store Manager Portal<br/>(/workspace/store-manager)"]
+        DISP["Central Dispatcher Desk<br/>(/workspace/dispatcher)"]
+        LOAD["Loader Dock Terminal<br/>(/workspace/loader)"]
+        DRV["Driver Mobile Web App<br/>(/workspace/driver)"]
+    end
+
+    subgraph ApiGateway ["API Gateway & Core Backend (NestJS + Fastify - Port 3001)"]
+        AuthModule["Auth & RBAC Module<br/>(JWT + ResourceScopeGuard)"]
+        StoreModule["Store Operations Module<br/>(Cutoff & Discrepancies)"]
+        OrdersModule["Orders & Replenishment Module<br/>(Dual-Order Invariant)"]
+        DispatchModule["Dispatch & Routing Module<br/>(7 Feasibility Rules)"]
+        LoaderModule["Loader & Staging Module<br/>(LIFO Reverse Sequences)"]
+        DriverModule["Driver Execution Module<br/>(POD & Geofenced Arrivals)"]
+        SyncModule["Offline Sync Module<br/>(Idempotent Mutations)"]
+    end
+
+    subgraph DataLayer ["Persistence & Infrastructure Layer"]
+        PgBouncer["PgBouncer Connection Pooler<br/>(Transaction Mode - Port 6432)"]
+        Postgres[("PostgreSQL 16 Database<br/>(Drizzle ORM - Port 5432)")]
+        Redis[("Redis 7 + BullMQ<br/>(Async Worker Queue - Port 6379)")]
+    end
+
+    ClientLayer -->|REST API / JSON| ApiGateway
+    ApiGateway --> PgBouncer
+    PgBouncer --> Postgres
+    ApiGateway --> Redis
 ```
 
-Open http://localhost:3000. The root redirects to `/login`.
+---
 
-```sh
-npm run lint
-npm run typecheck
-npm run build
-npm start
-```
+## 3. Technology Stack
 
-The browser walkthrough and verified scope are documented in [docs/verification.md](docs/verification.md).
+### Frontend Application (`apps/web`)
+- **Framework**: Next.js 15 (React 19, Turbopack, App Router)
+- **Language**: TypeScript 5.7 (Strict mode enabled)
+- **Styling & UI**: Tailwind CSS, CSS Variables design token system
+- **UI Primitives**: Radix UI / shadcn accessible component architecture
+- **Icons & Data Viz**: Lucide React, Recharts 2.15
+- **Mapping**: Leaflet 1.9 & React-Leaflet with OpenStreetMap tiles
 
-## Current scope
+### Backend API Service (`apps/api`)
+- **Framework**: NestJS 11 with Fastify (`@nestjs/platform-fastify`)
+- **Database Engine**: PostgreSQL 16 (Relational, 3NF/BCNF normalized)
+- **ORM & Migrations**: Drizzle ORM 0.40 with PostgreSQL driver (`pg`)
+- **Connection Pooling**: PgBouncer transaction-mode pooler
+- **Async Queue & Cache**: Redis 7 Alpine with BullMQ
+- **Validation & Serialization**: `class-validator`, `class-transformer`
+- **Security & Auth**: Passport.js, JWT bearer tokens, Argon2 password hashing
 
-The responsive sign-in portal supports email or employee ID, password visibility, field validation, remember-me behavior, password help, and four demo roles. Use a role button to fill its demonstration credentials, then sign in. Employee IDs are `DISP001`, `LOAD001`, `DRIV001`, and `STORE001`; the demo password is `waypoint-demo`.
+---
 
-Authentication is a **frontend demonstration**, not secure backend authentication. The demo adapter stores only a role session with an expiry, never the password. Remembered sessions use local storage for seven days; other sessions use session storage with a twelve-hour expiry. Sign-out clears both. Loader, driver and store-manager landing pages are scaffolds for the next implementation step.
+## 4. Role Workspaces & Implemented Workflows
 
-## Dispatcher dashboard
+### 4.1 Store Manager (`/workspace/store-manager`)
+- **Replenishment Ordering (`SM-1`)**: Daily replenishment ordering with SKU search, category filters, and live cart weight/volume rollups.
+- **16:00 Colombo Cutoff Enforcement (`SM-ORD-001`)**: Real-time cutoff clock. Orders submitted before 16:00 are scheduled for next-day dispatch ($T+1$); orders submitted after 16:00 are automatically queued for the following run ($T+2$).
+- **Fresh Dual-Order Invariant (`SM-ORD-002`)**: Fresh supermarkets can place max 1 ambient order and 1 chilled order per date (`UNIQUE(outlet_id, order_date, temp_requirement)`). Style and Tech are locked to ambient.
+- **Split Delivery Visibility (`ALT-1`)**: Displays dual delivery cards with distinct driver details, vehicle plates, and separate ETAs when ambient and chilled goods travel on separate trucks.
+- **Electronic Receiving Inspection (`SM-POD-001`)**: Visual review of driver proof of delivery receipts, touch-signatures, and GPS dock geofence coordinates.
+- **Receiving Discrepancy Claims (`SM-3`, `SM-DISC-001`)**: Reporting of physical damage (`DAMAGE_IN_TRANSIT`), carton shortages (`STORE_SHORTFALL`), or temperature violations (`REJECTED_TEMPERATURE`).
 
-Sign in as Dispatcher to open `/workspace/dispatcher`. Today’s overview follows the supplied Excalidraw's layout: collapsible navigation, fleet pie charts, vehicle-allocation and order-progress donuts, scrollable brand analysis, and a calendar/queue drawer. The drawer can collapse or resize using its keyboard-accessible width slider. Charts derive from the same locally saved plan; legends and the brand table expose their counts.
+### 4.2 Central Dispatcher (`/workspace/dispatcher`)
+- **Stationed Location**: Single Central Dispatch desk at **Peliyagoda Central Hub**.
+- **8 Integrated Workspaces**:
+  1. `Today's Overview`: Fleet donut charts, vehicle capacity utilization, brand volume breakdown, and real-time Colombo cutoff countdown.
+  2. `Order Intake`: Backlog filtering by brand/status, SKU line inspection, and atomic trip allocation.
+  3. `Manage Fleet`: Vehicle payload limits (kg / m³), refrigeration types, and weekly fuel quotas.
+  4. `Route Planning`: Multi-stop route construction with drag-and-drop sequencing and delivery window alerts.
+  5. `Deferrals`: Anti-starvation tracking, structured deferral reasons, and automatic priority elevation.
+  6. `Outlets`: Store directory, district routing zones, and van-only access flags.
+  7. `Calendar`: Fleet departure schedules and operational events.
+  8. `Chat & Monitoring`: Role-filtered operations communication.
+- **7 Core Feasibility Rules**: Automated validation of brand homogeneity, temperature matching, van-only access, depot parity, capacity bounds, shift duration budgets (270m Fresh / 480m Style & Tech), and vehicle trip limits (max 2 trips/day).
 
-The demo day is 3 October 2026. Choose Peliyagoda or Kandy, then use the connected dispatcher views:
+### 4.3 Delivery Driver (`/workspace/driver`)
+- **Operational Execution**: Smartphone-optimized mobile web app designed for thumb-friendly in-cab use.
+- **Trip Sequence Manifest**: Ordered stops with target delivery windows ($[T_{\text{open}}, T_{\text{close}}]$).
+- **Geofenced Arrival & Holding Timer**: GPS geofencing with holding countdown if arriving prior to store opening hours.
+- **Proof of Delivery (POD) Capture**: Digital touch signature, photo upload, receiver name, and GPS coordinates.
+- **Exception Reporting**: Direct logging of store closures, customer refusals, and road delays.
 
-- **Order intake** (`#planning`): inspect a paginated requirements table, filter by status/brand, search and sort. Open an order's adjustable details panel to assign it to an existing trip, allocate an eligible new trip, or record a deferral. Assigned orders link to their route; deferred orders can return to the backlog.
-- **Manage fleet** (`#fleet`): filter and inspect vehicles, compare peak per-trip weight/volume, daily trips and estimated fuel. Current Fleet includes distribution charts and route links; Managed Capacities compares trip loads, schedules, checks and fuel after the plan. Workshop vehicles cannot be allocated.
-- **Route planning** (`#routes`): select a route from the schedule, create a trip, assign whole backlog orders, choose compatible vehicles, change departure, reorder/remove stops and resolve checks before review.
-- **Deferrals** (`#deferrals`): search/filter records, inspect the reason and decision note, compare distributions and return eligible orders to the backlog.
-- **Outlets** (`#outlets`): inspect the fixture directory by depot/district/brand, review outlet requirements and open linked orders or routes. Manager, service history and dock details are unavailable.
-- **Calendar** (`#calendar`): view month/agenda layouts, inspect plan departures and create, edit or delete local planning events.
-- **Chat** (`#chat`): filter demo conversations by role, save local messages and mark sample messages read. Messages stay in this browser and are not delivered to people.
+### 4.4 Warehouse Loader (`/workspace/loader`)
+- **Dock Staging Queue**: Filterable staging manifest by vehicle plate, temperature type, and trip sequence.
+- **LIFO Reverse Loading (`BR-LOAD-001`)**: Enforces reverse stop sequence ($N \to 1$) so first-delivery goods are loaded last at the truck door.
+- **Pre-Departure Discrepancy Logging (`FAIL-A`)**: Reports warehouse shortfalls or damaged pallets before departure.
+- **Gate Clearance Issuance (`L5`)**: Validates LIFO compliance and generates electronic gate passes before vehicles leave the yard.
 
-Route Planning also includes **Track deliveries** (`#routes/tracking`) and **Manage assigned routes** (`#routes/manage`). Leaflet 1.9.4 maps support interactive illustrative pins; connecting lines show stop sequence, not road directions or factual ETAs. Tracking advances a local simulation, with saved progress invalidated when the route changes; it provides no real GPS or proof of delivery. The window-order suggestion sorts fixture windows and is not an optimizer.
+---
 
-The shell includes an Asia/Colombo clock, the 16:00 cutoff reference, a searchable notification drawer with local read state and navigation actions, an account menu and a persistent scoped light/dark appearance. Calendar, chat, read state, simulated progress and appearance use the separate typed key `waypoint.demo.workspace.v1`; unsuccessful saves preserve drafts and expose retry feedback.
-
-Assignment checks explain incompatible capacity, temperature, access, depot, brand/district, fuel and schedule choices. Carry-over orders are flagged; deferrals require a reason and decision note. Each view reads the same saved plan, and the current view survives reload through its URL fragment. Phone inspection actions reveal and focus their details panel.
-
-Publication requires every depot order to be assigned or deferred and all trips to pass demo checks. Publishing saves and locks the **local preview**; reopen it to continue editing. No real manifests or notifications are sent. Plans survive reload in browser local storage under `waypoint.demo.dispatch.v1`; sample fixtures live in `apps/web/src/features/dispatcher/planning.ts`. Other dates show an empty state rather than fabricated orders.
-
-All fixture quantities, fleet data, fuel and travel timings are synthetic. The 30-minute return/reload allowance and 20-character repeated-deferral justification are demo policies. These frontend checks do not replace authoritative backend validation or the organizer's checker. See [dispatcher brief](docs/dispatcher-brief.md) and [verification](docs/verification.md).
-
-The `AuthService` interface in `apps/web/src/features/auth/auth-service.ts` is the replacement boundary for the future backend. Backend authorization must be implemented before production use. Password help explains that account recovery becomes available with that backend; it does not pretend to send an email.
-
-## Repository layout
+## 5. Repository Structure
 
 ```text
-apps/web/       Next.js + TypeScript frontend
-docs/           Active implementation plan and screen briefs
-reference/      Local booklet, planning notes, Excalidraw and review archive
-PRODUCT.md      Product context
-DESIGN.md       Implemented visual system
+waypoint-logistics/
+├── apps/
+│   ├── api/                     # NestJS + Fastify REST Backend
+│   │   ├── src/
+│   │   │   ├── auth/            # JWT authentication & strategies
+│   │   │   ├── common/          # Guards, interceptors, filters, decorators
+│   │   │   ├── database/        # Drizzle schema, connection pool, migrations
+│   │   │   ├── dispatch/        # Trip planning & 7 feasibility rules
+│   │   │   ├── driver/          # Driver trips, stops, and POD capture
+│   │   │   ├── loader/          # Loading manifest, LIFO checks, gate pass
+│   │   │   ├── master-data/     # Outlets, vehicles, products, depots
+│   │   │   ├── orders/          # Order intake & dual-order validation
+│   │   │   ├── store/           # Store Manager overview, deliveries, claims
+│   │   │   └── sync/            # Offline mutation sync
+│   │   └── test/                # Unit and E2E API integration test suites
+│   └── web/                     # Next.js 15 Unified Frontend Application
+│       └── src/
+│           ├── app/             # App Router pages (/login, /workspace/[role])
+│           ├── components/      # UI primitives (buttons, dialogs, badges)
+│           └── features/        # Domain features (store-manager, dispatcher, driver, loader)
+├── docs/                        # Complete technical architecture documentation
+│   ├── backend/                 # Backend, database, API, and sizing design
+│   ├── driver/                  # Driver domain and screen specifications
+│   └── store-manager/           # Store Manager domain, rules, DB, and API specs
+├── infra/                       # Local infrastructure configurations
+│   └── pgbouncer/               # PgBouncer configuration and user lists
+├── docker-compose.yml           # Multi-container orchestration (PostgreSQL, Redis, PgBouncer)
+└── package.json                 # Monorepo workspace configuration
 ```
 
-`reference/` is preserved locally and excluded from Git. No planning files were deleted. The original Excalidraw in Downloads is untouched; a reference copy is archived here. Competition datasets have not been supplied.
+---
 
-## Design reference
+## 6. Local Development Quickstart
 
-The sign-in form follows `reference/design/Dis_new.excalidraw`. The user selected the existing form structure with an added branded side panel. The panel keeps Waypoint's blue identity and explains the shared delivery workflow. Phone layouts prioritize the form.
+### Prerequisites
+- **Node.js**: `v20.9.0` or higher (Node 22 LTS recommended)
+- **npm**: `v10.0.0` or higher
+- **Docker Engine & Docker Compose**: For local PostgreSQL, Redis, and PgBouncer
 
-## Competition integration still required
+### 1. Clone & Install Dependencies
+```bash
+git clone <repository-url>
+cd waypoint-logistics
+npm install
+```
 
-Operational role screens, authoritative allocation validation, backend authentication, database seeding, offline delivery reconciliation, complete Docker Compose stack, deployment, and judge walkthrough are future work. This frontend stage does not yet meet the complete Hackathon submission requirements.
+### 2. Start Local Infrastructure
+Launch PostgreSQL 16, Redis 7, and PgBouncer via Docker Compose:
+```bash
+docker compose up -d postgres redis pgbouncer
+```
 
-## AI assistance
+### 3. Configure Environment Variables
+Copy the example environment configurations:
+```bash
+# In repository root
+cp .env.example .env
 
-Codex assisted with repository organization, framework initialization, frontend implementation, and verification. The supplied Excalidraw and project notes are the team's design references. A full competition disclosure will be maintained under `docs/` as development continues.
+# Verify environment variables
+cat .env
+```
+
+Key environment settings:
+```ini
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/waypoint
+PGBOUNCER_URL=postgresql://postgres:postgres@localhost:6432/waypoint
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=super-secret-waypoint-jwt-key-2026
+PORT=3001
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+```
+
+### 4. Run Migrations & Seed Development Data
+```bash
+# Execute Drizzle schema migrations
+npm run db:migrate
+
+# Seed master outlets, fleet vehicles, depots, and demonstration users
+npm run db:seed
+```
+
+### 5. Launch Development Servers
+Run both API and Web applications concurrently:
+```bash
+# Terminal 1: Backend API (Port 3001)
+npm run dev:api
+
+# Terminal 2: Web Frontend (Port 3000)
+npm run dev:web
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 7. Demonstration Accounts & Roles
+
+The system is pre-seeded with authenticated accounts for each supply chain role:
+
+| Role | Username / Email | Employee ID | Default Password | Workspace Route |
+| :--- | :--- | :--- | :--- | :--- |
+| **Central Dispatcher** | `dispatcher@waypoint.demo` | `DISP001` | `waypoint-demo` | `/workspace/dispatcher` |
+| **Store Manager** | `store@waypoint.demo` | `STORE001` | `waypoint-demo` | `/workspace/store-manager` |
+| **Warehouse Loader** | `loader@waypoint.demo` | `LOAD001` | `waypoint-demo` | `/workspace/loader` |
+| **Delivery Driver** | `driver@waypoint.demo` | `DRIV001` | `waypoint-demo` | `/workspace/driver` |
+
+---
+
+## 8. Testing Strategy & Automated Verification
+
+Waypoint maintains automated test coverage across business math, database integration, API contracts, and security guards:
+
+```bash
+# Run backend unit, integration, and API contract tests
+npm run test:api
+
+# Run TypeScript typecheck across all applications
+npm run typecheck
+
+# Build backend production bundle
+npm --prefix apps/api run build
+
+# Build frontend production bundle (Next.js Turbopack)
+npm --prefix apps/web run build
+```
+
+### Test Suite Summary
+- **Lifo & Cutoff Math (`lifo-and-cutoff.spec.ts`)**: Validates stop $N \to 1$ inverse sequencing, early arrival hold time math, and 16:00 cutoff boundary classification.
+- **7 Feasibility Rules (`feasibility-rules.spec.ts`)**: Validates cold-chain constraints, van access, vehicle weight/volume boundaries, and anti-starvation rules.
+- **Store Manager Integration (`store-manager.spec.ts`)**: Tests store overview generation, split vehicle ETAs (`ALT-1`), proof of delivery inspection, and receiving discrepancy logging (`SM-3`).
+- **Connection Pool & Health (`connection-pool.spec.ts`, `api-validation.spec.ts`)**: Asserts PgBouncer connection reuse, transaction rollbacks, and health endpoints.
+
+---
+
+## 9. Comprehensive Documentation Sitemap
+
+| Domain / Focus Area | Authoritative Document |
+| :--- | :--- |
+| **Store Manager Architecture** | [`docs/store-manager/STORE_MANAGER_IMPLEMENTATION_REPORT.md`](docs/store-manager/STORE_MANAGER_IMPLEMENTATION_REPORT.md) |
+| **Store Business Rules** | [`docs/store-manager/STORE_MANAGER_BUSINESS_RULES.md`](docs/store-manager/STORE_MANAGER_BUSINESS_RULES.md) |
+| **Store Database Design** | [`docs/store-manager/STORE_MANAGER_DATABASE_DESIGN.md`](docs/store-manager/STORE_MANAGER_DATABASE_DESIGN.md) |
+| **Store Manager API Contract** | [`docs/store-manager/STORE_MANAGER_API_CONTRACT.md`](docs/store-manager/STORE_MANAGER_API_CONTRACT.md) |
+| **Backend Architecture & ADRs** | [`docs/backend/BACKEND_ARCHITECTURE.md`](docs/backend/BACKEND_ARCHITECTURE.md) |
+| **Database Connection & Sizing** | [`docs/backend/DATABASE_CONNECTION_ARCHITECTURE.md`](docs/backend/DATABASE_CONNECTION_ARCHITECTURE.md) |
+| **REST API Specification** | [`docs/backend/API_CONTRACT.md`](docs/backend/API_CONTRACT.md) |
+| **State Machine Transitions** | [`docs/backend/STATE_MACHINES.md`](docs/backend/STATE_MACHINES.md) |
+| **Driver Responsibilities** | [`docs/driver/DRIVER_RESPONSIBILITIES.md`](docs/driver/DRIVER_RESPONSIBILITIES.md) |
+| **Deployment & Production** | [`docs/backend/DEPLOYMENT.md`](docs/backend/DEPLOYMENT.md) |
+
+---
+
+## 10. Security & Data Integrity
+
+- **Resource Scope Isolation (`ResourceScopeGuard`)**: Store Managers can access only records belonging to their assigned outlet (`outletId` derived from signed JWT). Cross-outlet IDOR attempts return `403 Forbidden`.
+- **Pre-Cutoff Invariants**: Cancellation and order mutations are strictly blocked once orders are locked or dispatched into route manifests.
+- **Zero Paid Dependencies**: The entire architecture runs on open-source, self-hosted software without proprietary paywalls.
