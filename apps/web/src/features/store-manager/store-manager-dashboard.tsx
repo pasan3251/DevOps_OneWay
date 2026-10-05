@@ -17,6 +17,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Truck,
+  MessageSquare,
 } from "lucide-react";
 import {
   Dialog,
@@ -27,6 +28,8 @@ import {
 } from "@/components/ui/dialog";
 import { WaypointLogo } from "@/components/waypoint-logo";
 import { authService, type Session } from "@/features/auth/auth-service";
+import { SharedAccountTools } from "@/features/shared/account-tools";
+import { WorkspaceChat } from "@/features/dispatcher/workspace-chat";
 import { DeliveriesView } from "./components/deliveries-view";
 import { NewOrderView } from "./components/new-order-view";
 import { OrdersView } from "./components/orders-view";
@@ -42,12 +45,13 @@ import "@/features/dispatcher/workspace.css";
 import "@/features/dispatcher/monochrome.css";
 import "./store-manager.css";
 
-type StoreView = "today" | "orders" | "new-order" | "receiving";
+type StoreView = "today" | "orders" | "new-order" | "receiving" | "messages";
 
 const storeNavigation = [
   { id: "today", label: "Today", Icon: LayoutDashboard },
   { id: "orders", label: "Orders", Icon: ClipboardList },
   { id: "receiving", label: "Receiving", Icon: Truck },
+  { id: "messages", label: "Messages", Icon: MessageSquare },
 ] as const;
 
 const NAV_COLLAPSED_KEY = "waypoint.store.navigation-collapsed.v1";
@@ -100,7 +104,7 @@ export function StoreManagerDashboard() {
     const timer = window.setTimeout(() => {
       setSession(active);
       const destination = window.location.hash.slice(1);
-      if (["today", "orders", "new-order", "receiving"].includes(destination)) {
+      if (["today", "orders", "new-order", "receiving", "messages"].includes(destination)) {
         setView(destination as StoreView);
       }
       try {
@@ -169,7 +173,9 @@ export function StoreManagerDashboard() {
         ? ["Orders", "Place replenishment orders and follow each Dispatch decision."]
         : view === "new-order"
           ? ["Create order", "Build one whole ambient or chilled order for the selected delivery day."]
-          : ["Receiving", "Track incoming vehicles, review proof and report physical differences."];
+          : view === "receiving"
+            ? ["Receiving", "Track incoming vehicles, review proof and report physical differences."]
+            : ["Messages", "Coordinate operational questions with Dispatch, drivers and warehouse teams."];
 
   return (
     <div className={`dispatch-app store-app${navCollapsed ? " navigation-collapsed" : ""}`}>
@@ -204,7 +210,7 @@ export function StoreManagerDashboard() {
           <span className="user-avatar">SM</span>
           <div>
             <strong>{session.name}</strong>
-            <span>Store manager · Demo</span>
+            <span>Store manager · {session.location}</span>
           </div>
           <button aria-label="Sign out" onClick={signOut}>
             <LogOut size={18} aria-hidden="true" />
@@ -226,7 +232,8 @@ export function StoreManagerDashboard() {
             <span>Store operations</span>
           </div>
           <div>
-            <span className="demo-label">Demo data</span>
+            <span className="demo-label">Live operations</span>
+            <SharedAccountTools session={session} />
             <span className="store-clock" aria-label="Current time in Asia Colombo">
               <Clock3 size={15} aria-hidden="true" />
               {data.cutoff.currentColomboTime}
@@ -318,6 +325,8 @@ export function StoreManagerDashboard() {
               onRefresh={() => void loadData(true)}
             />
           )}
+
+          {view === "messages" && <WorkspaceChat />}
         </main>
       </div>
 

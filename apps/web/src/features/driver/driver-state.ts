@@ -1,608 +1,486 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { authService } from "@/features/auth/auth-service";
+import { apiRequest } from "@/lib/api-client";
 import type {
+  CompletedTripSummary,
   DriverRouteData,
   OfflineSyncItem,
-  CompletedTripSummary,
+  PreTripChecklist,
   ProofOfDeliveryRecord,
   StopExceptionRecord,
-  PreTripChecklist,
   StopItem,
 } from "./driver-types";
-import {
-  initialActiveRoute,
-  sampleHistoryTrips,
-  sampleInitialSyncQueue,
-} from "./driver-data";
 
-const ROUTE_STORAGE_KEY = "waypoint.driver.route.v3";
-const SYNC_STORAGE_KEY = "waypoint.driver.sync.v3";
-const HISTORY_STORAGE_KEY = "waypoint.driver.history.v3";
+const ROUTE_CACHE_KEY = "waypoint.driver.offline-route.v1";
+const SYNC_STORAGE_KEY = "waypoint.driver.sync.v4";
 const OFFLINE_OVERRIDE_KEY = "waypoint.driver.offline_override.v1";
 
-function getColomboClock() {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Colombo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+type BackendItem = {
+  quantityRequested: number;
+  product: { sku: string; name: string; category: string; tempRequirement: "ambient" | "chilled" };
+};
+
+type BackendStop = {
+  id: string;
+  orderId: string;
+  stopSequence: number;
+  loadingSequence: number;
+  plannedArrivalTime?: string | null;
+  actualArrivalTime?: string | null;
+  actualDepartureTime?: string | null;
+  windowHoldUntil?: string | null;
+  slaBreach: boolean;
+  slaBreachMinutes: number;
+  status: string;
+  failureReason?: string | null;
+  failureNotes?: string | null;
+  failurePhotoUrl?: string | null;
+  affectedCartons: number;
+  reportedDelayMinutes: number;
+  delayReason?: string | null;
+  proofOfDelivery?: {
+    storeRepName: string;
+    storeRepDesignation?: string | null;
+    outcome: "FULL" | "PARTIAL";
+    expectedCartons: number;
+    deliveredCartons: number;
+    storeRepSignatureUrl?: string | null;
+    photoEvidenceUrl?: string | null;
+    driverNotes?: string | null;
+    geoLatitude: string;
+    geoLongitude: string;
+    capturedAt: string;
+  } | null;
+  outlet: {
+    name: string;
+    address: string;
+    district: string;
+    brand: "Fresh" | "Style" | "Tech";
+    latitude: string;
+    longitude: string;
+    contactPhone: string;
+    windowStart: string;
+    windowEnd: string;
+    mallWindowStart?: string | null;
+    mallWindowEnd?: string | null;
+    parkingConstraint: string;
+    dockType: string;
+    isVanOnly: boolean;
+    serviceTimeMinutes: string;
+  };
+  order: {
+    id: string;
+    brand: "Fresh" | "Style" | "Tech";
+    tempRequirement: "ambient" | "chilled";
+    totalWeightKg: string;
+    totalVolumeM3: string;
+    totalItemsCount: number;
+    items: BackendItem[];
+  };
+};
+
+type BackendTrip = {
+  id: string;
+  tripNumber: string;
+  tripSequenceInDay: number;
+  status: string;
+  brand: "Fresh" | "Style" | "Tech";
+  district: string;
+  operatingDate: string;
+  plannedDepartureTime?: string | null;
+  actualDepartureTime?: string | null;
+  actualReturnTime?: string | null;
+  gateClearedAt?: string | null;
+  driverReadyAt?: string | null;
+  plannedDurationMin: number;
+  plannedDistanceKm: string;
+  vehicle: {
+    registrationNumber: string;
+    bodyType: "truck" | "van";
+    refrigerationType: "reefer" | "ambient";
+    maxWeightKg: string;
+    maxVolumeM3: string;
+    fuelEfficiencyKmPerL: string;
+    weeklyFuelQuotaL: string;
+    weekToDateFuelUsedL: string;
+  };
+  depot: { name: string; latitude: string; longitude: string; operatingHoursOpen: string };
+  stops: BackendStop[];
+};
+
+type SyncResult = {
+  clientMutationId: string;
+  status: "COMMITTED" | "ALREADY_COMMITTED" | "CONFLICT" | "FAILED";
+  error?: string;
+};
+
+type SyncResponse = { results: SyncResult[] };
+
+function storedValue<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function minutes(value?: string | null) {
+  if (!value) return 0;
+  if (value.includes("T")) {
+    const date = new Date(value);
+    return date.getHours() * 60 + date.getMinutes();
+  }
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function timeLabel(value?: string | null) {
+  return value
+    ? new Date(value).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Colombo" })
+    : undefined;
+}
+
+function depotName(name: string): "Peliyagoda" | "Kandy" {
+  return name.toLowerCase().includes("kandy") ? "Kandy" : "Peliyagoda";
+}
+
+function stopStatus(status: string): StopItem["status"] {
+  if (status === "ARRIVED") return "arrived";
+  if (status === "WAITING_WINDOW") return "waiting_window";
+  if (status === "UNLOADING") return "unloading";
+  if (status === "DELIVERED") return "delivered";
+  if (status === "DISCREPANCY_FLAGGED") return "partial";
+  if (status === "FAILED") return "exception";
+  return "scheduled";
+}
+
+function mapRoute(trip: BackendTrip): DriverRouteData {
+  const session = authService.getSession();
+  const firstPendingIndex = trip.stops.findIndex((stop) => !["DELIVERED", "DISCREPANCY_FLAGGED", "FAILED"].includes(stop.status));
+  const mappedStops: StopItem[] = trip.stops.map((stop, index) => {
+    let status = stopStatus(stop.status);
+    if (trip.status === "EN_ROUTE" && index === firstPendingIndex && status === "scheduled") status = "en_route";
+    const outletOpen = minutes(stop.outlet.windowStart);
+    const outletClose = minutes(stop.outlet.windowEnd);
+    const mallOpen = stop.outlet.mallWindowStart ? minutes(stop.outlet.mallWindowStart) : outletOpen;
+    const mallClose = stop.outlet.mallWindowEnd ? minutes(stop.outlet.mallWindowEnd) : outletClose;
+    const effectiveWindow: [number, number] = [Math.max(outletOpen, mallOpen), Math.min(outletClose, mallClose)];
+    const proof = stop.proofOfDelivery;
+    return {
+      id: stop.id,
+      orderIds: [stop.orderId],
+      sequence: stop.stopSequence,
+      lifoPosition: stop.loadingSequence,
+      outlet: `${stop.outlet.brand} · ${stop.outlet.name}`,
+      address: stop.outlet.address,
+      coordinates: { lat: Number(stop.outlet.latitude), lng: Number(stop.outlet.longitude) },
+      district: stop.outlet.district,
+      brand: stop.order.brand,
+      dockType: stop.outlet.dockType === "rear_dock" || stop.outlet.dockType === "mall_bay" ? stop.outlet.dockType : "street",
+      parkingConstraint: stop.outlet.isVanOnly ? "van_only" : stop.outlet.parkingConstraint === "mall_dock" ? "mall_dock" : "normal",
+      window: [outletOpen, outletClose],
+      mallWindow: stop.outlet.mallWindowStart && stop.outlet.mallWindowEnd ? [mallOpen, mallClose] : undefined,
+      effectiveWindow,
+      estimatedArrival: minutes(stop.plannedArrivalTime),
+      serviceAllowanceMinutes: Number(stop.outlet.serviceTimeMinutes),
+      contact: { name: stop.outlet.name, phone: stop.outlet.contactPhone, designation: "Store receiving" },
+      orders: [{
+        id: stop.order.id,
+        brand: stop.order.brand,
+        category: stop.order.items[0]?.product.category ?? "Order items",
+        chilled: stop.order.tempRequirement === "chilled",
+        kg: Number(stop.order.totalWeightKg),
+        m3: Number(stop.order.totalVolumeM3),
+        cartons: stop.order.totalItemsCount,
+        items: stop.order.items.map((item) => ({
+          sku: item.product.sku,
+          name: item.product.name,
+          qty: item.quantityRequested,
+          unit: item.quantityRequested === 1 ? "unit" : "units",
+          tempRequirement: item.product.tempRequirement,
+        })),
+      }],
+      totalKg: Number(stop.order.totalWeightKg),
+      totalM3: Number(stop.order.totalVolumeM3),
+      totalCartons: stop.order.totalItemsCount,
+      status,
+      actualArrivalTimestamp: timeLabel(stop.actualArrivalTime),
+      actualCompletionTimestamp: timeLabel(stop.actualDepartureTime),
+      holdingRemainingMinutes: stop.windowHoldUntil ? Math.max(0, Math.ceil((new Date(stop.windowHoldUntil).getTime() - Date.now()) / 60_000)) : 0,
+      deliveryWindowState: stop.slaBreach ? "breach" : "on_time",
+      lateByMinutes: stop.slaBreachMinutes,
+      pod: proof ? {
+        recipientName: proof.storeRepName,
+        recipientDesignation: proof.storeRepDesignation ?? "Store receiving",
+        deliveredCartons: proof.deliveredCartons,
+        expectedCartons: proof.expectedCartons,
+        outcome: proof.outcome === "FULL" ? "full" : "partial",
+        signatureDataUrl: proof.storeRepSignatureUrl ?? undefined,
+        photoDataUrl: proof.photoEvidenceUrl ?? undefined,
+        notes: proof.driverNotes ?? undefined,
+        timestamp: proof.capturedAt,
+        geoCoordinates: { lat: Number(proof.geoLatitude), lng: Number(proof.geoLongitude) },
+      } : undefined,
+      exception: stop.status === "FAILED" ? {
+        code: (stop.failureReason ?? "ACCESS_BLOCKED") as StopExceptionRecord["code"],
+        category: "delivery",
+        reasonLabel: (stop.failureReason ?? "Delivery exception").replaceAll("_", " "),
+        notes: stop.failureNotes ?? "Delivery exception recorded",
+        affectedCartons: stop.affectedCartons,
+        photoDataUrl: stop.failurePhotoUrl ?? undefined,
+        reportedAt: stop.actualDepartureTime ?? new Date().toISOString(),
+      } : undefined,
+    };
+  });
+  const terminal = mappedStops.filter((stop) => ["delivered", "partial", "exception"].includes(stop.status));
   return {
-    minutes: hour * 60 + minute,
-    label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    tripId: trip.id,
+    tripNumber: trip.tripSequenceInDay === 2 ? 2 : 1,
+    depot: depotName(trip.depot.name),
+    depotCoordinates: { lat: Number(trip.depot.latitude), lng: Number(trip.depot.longitude) },
+    vehicle: {
+      id: trip.vehicle.registrationNumber,
+      plate: trip.vehicle.registrationNumber,
+      model: `${trip.vehicle.bodyType === "van" ? "Van" : "Truck"} · ${trip.vehicle.refrigerationType === "reefer" ? "Refrigerated" : "Ambient"}`,
+      depot: depotName(trip.depot.name),
+      type: trip.vehicle.bodyType === "van" ? "Van" : "Truck",
+      chilled: trip.vehicle.refrigerationType === "reefer",
+      weightCapacityKg: Number(trip.vehicle.maxWeightKg),
+      volumeCapacityM3: Number(trip.vehicle.maxVolumeM3),
+      fuelRemainingLiters: Math.max(0, Number(trip.vehicle.weeklyFuelQuotaL) - Number(trip.vehicle.weekToDateFuelUsedL)),
+      fuelQuotaLiters: Number(trip.vehicle.weeklyFuelQuotaL),
+      kmPerLiter: Number(trip.vehicle.fuelEfficiencyKmPerL),
+      reeferActive: trip.vehicle.refrigerationType === "reefer",
+      reeferTemperatureC: null,
+      targetReeferRange: [2, 4],
+      engineStatus: trip.status === "EN_ROUTE" ? "running" : "stopped",
+    },
+    driver: {
+      id: session?.userId ?? "driver",
+      name: session?.name ?? "Assigned driver",
+      phone: session?.phone ?? "",
+      employeeId: session?.email ?? "",
+      shiftStartTime: trip.depot.operatingHoursOpen,
+    },
+    brand: trip.brand,
+    district: trip.district,
+    departurePlannedMin: minutes(trip.plannedDepartureTime),
+    departureActualTimestamp: timeLabel(trip.actualDepartureTime),
+    shiftBudgetMinutes: trip.plannedDurationMin,
+    elapsedMinutes: 0,
+    shiftStatus: trip.status === "RETURNING" ? "returning" : trip.status === "EN_ROUTE" ? (terminal.length === mappedStops.length ? "returning" : "in_transit") : "assigned",
+    stops: mappedStops,
+    routeDistanceKm: Number(trip.plannedDistanceKm),
+    returnDistanceKm: null,
+    loaderClearance: { cleared: Boolean(trip.gateClearedAt), clearedAt: timeLabel(trip.gateClearedAt), manifestVersion: "Published manifest" },
+    preTripCompleted: Boolean(trip.driverReadyAt),
+    transitDelayMinutes: trip.stops.reduce((sum, stop) => sum + stop.reportedDelayMinutes, 0),
   };
 }
 
+function mutationFor(item: OfflineSyncItem) {
+  const action = {
+    pretrip: "confirm_readiness",
+    departure: "depart_trip",
+    arrival: "arrive_stop",
+    pod: "deliver_stop",
+    exception: "fail_stop",
+    delay: "report_delay",
+    trip_complete: "complete_trip",
+  }[item.type];
+  return { clientMutationId: item.id, entity: item.stopId ? "trip_stop" : "trip", action, occurredAt: item.timestamp, payload: item.payload };
+}
+
 export function useDriverState() {
-  const [route, setRoute] = useState<DriverRouteData>(() => {
-    if (typeof window === "undefined") return initialActiveRoute;
-    try {
-      const saved = localStorage.getItem(ROUTE_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return initialActiveRoute;
-  });
-
-  const [syncQueue, setSyncQueue] = useState<OfflineSyncItem[]>(() => {
-    if (typeof window === "undefined") return sampleInitialSyncQueue;
-    try {
-      const saved = localStorage.getItem(SYNC_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return sampleInitialSyncQueue;
-  });
-
-  const [history, setHistory] = useState<CompletedTripSummary[]>(() => {
-    if (typeof window === "undefined") return sampleHistoryTrips;
-    try {
-      const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return sampleHistoryTrips;
-  });
-
-  const [isSimulatedOffline, setIsSimulatedOffline] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem(OFFLINE_OVERRIDE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  const [isBrowserOnline, setIsBrowserOnline] = useState<boolean>(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-
-  // Monitor physical network connectivity
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handleOnline = () => setIsBrowserOnline(true);
-    const handleOffline = () => setIsBrowserOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
+  const [route, setRoute] = useState<DriverRouteData | null>(() => storedValue(ROUTE_CACHE_KEY, null));
+  const [syncQueue, setSyncQueue] = useState<OfflineSyncItem[]>(() => storedValue(SYNC_STORAGE_KEY, []));
+  const [history, setHistory] = useState<CompletedTripSummary[]>([]);
+  const [isSimulatedOffline, setIsSimulatedOffline] = useState(() => storedValue(OFFLINE_OVERRIDE_KEY, false));
+  const [isBrowserOnline, setIsBrowserOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const effectiveOnline = isBrowserOnline && !isSimulatedOffline;
 
-  // Persist route
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(route));
-    }
-  }, [route]);
-
-  // Persist sync queue
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(syncQueue));
-    }
-  }, [syncQueue]);
-
-  // Persist history
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
-    }
-  }, [history]);
-
-  // Persist simulated offline
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        OFFLINE_OVERRIDE_KEY,
-        isSimulatedOffline ? "true" : "false",
-      );
-    }
-  }, [isSimulatedOffline]);
-
-  // Queue an offline sync event
-  const enqueueSyncItem = useCallback(
-    (
-      type: OfflineSyncItem["type"],
-      description: string,
-      payload: Record<string, unknown>,
-      stopId?: string,
-    ) => {
-      const now = new Date().toISOString();
-      const item: OfflineSyncItem = {
-        id: `SYNC-${Date.now().toString().slice(-6)}`,
-        type,
-        timestamp: now,
-        stopId,
-        description,
-        payload,
-        synced: effectiveOnline,
-        syncState: effectiveOnline ? "synced" : "pending",
-        retryCount: 0,
-      };
-
-      // The field ledger stays oldest-first so replay order is deterministic.
-      setSyncQueue((prev) => [...prev, item]);
-    },
-    [effectiveOnline],
-  );
-
-  // Trigger manual or automatic synchronization
-  const triggerSync = useCallback(() => {
+  const reload = useCallback(async () => {
     if (!effectiveOnline) return;
-    setIsSyncing(true);
-    setTimeout(() => {
-      setSyncQueue((prev) =>
-        prev.map((item) => ({
-          ...item,
-          synced: true,
-          syncState: "synced" as const,
-          error: undefined,
-        })),
-      );
-      setIsSyncing(false);
-    }, 900);
+    const [active, completed] = await Promise.all([
+      apiRequest<BackendTrip | null>("/driver/active-trip"),
+      apiRequest<BackendTrip[]>("/driver/trips/history"),
+    ]);
+    const mapped = active ? mapRoute(active) : null;
+    setRoute(mapped);
+    if (mapped) window.localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify(mapped));
+    else window.localStorage.removeItem(ROUTE_CACHE_KEY);
+    setHistory(completed.map((trip) => ({
+      tripId: trip.tripNumber,
+      date: trip.operatingDate,
+      brand: trip.brand,
+      district: trip.district,
+      vehicleId: trip.vehicle.registrationNumber,
+      stopsCount: trip.stops.length,
+      deliveredCount: trip.stops.filter((stop) => ["DELIVERED", "DISCREPANCY_FLAGGED"].includes(stop.status)).length,
+      exceptionCount: trip.stops.filter((stop) => stop.status === "FAILED").length,
+      totalKg: trip.stops.filter((stop) => stop.status !== "FAILED").reduce((sum, stop) => sum + Number(stop.order.totalWeightKg), 0),
+      totalCartons: trip.stops.reduce((sum, stop) => sum + (stop.proofOfDelivery?.deliveredCartons ?? 0), 0),
+      durationMinutes: trip.plannedDurationMin,
+      completedAt: timeLabel(trip.actualReturnTime) ?? "Completed",
+    })));
+    setError("");
   }, [effectiveOnline]);
 
-  // Auto-sync when transitioning from offline to online
   useEffect(() => {
-    if (effectiveOnline) {
-      const hasUnsynced = syncQueue.some((i) => !i.synced);
-      if (hasUnsynced) {
-        const timer = window.setTimeout(triggerSync, 0);
-        return () => window.clearTimeout(timer);
-      }
-    }
-  }, [effectiveOnline, syncQueue, triggerSync]);
+    const online = () => setIsBrowserOnline(true);
+    const offline = () => setIsBrowserOnline(false);
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); };
+  }, []);
 
-  // 1. Depart Depot / Start Trip
-  const startRoute = useCallback(() => {
-    if (!route.loaderClearance.cleared || !route.preTripCompleted) return;
-    const nowTimeStr = getColomboClock().label;
-    setRoute((prev) => {
-      const nextStops = [...prev.stops];
-      if (nextStops[0]) {
-        nextStops[0] = { ...nextStops[0], status: "en_route" };
-      }
-      return {
-        ...prev,
-        shiftStatus: "in_transit",
-        departureActualTimestamp: nowTimeStr,
-        stops: nextStops,
-      };
-    });
-
-    enqueueSyncItem(
-      "departure",
-      `Vehicle ${route.vehicle.id} departed ${route.depot} Depot for ${route.district}`,
-      { departureTime: nowTimeStr, vehicleId: route.vehicle.id },
-    );
-  }, [enqueueSyncItem, route.depot, route.district, route.loaderClearance.cleared, route.preTripCompleted, route.vehicle.id]);
-
-  // 2. Mark Arrived at Stop
-  const arriveAtStop = useCallback(
-    (stopId: string) => {
-      const { label: timeStr, minutes: currentMinutes } = getColomboClock();
-      const target = route.stops.find((stop) => stop.id === stopId);
-      const currentActive = route.stops.find(
-        (stop) =>
-          stop.status === "en_route" ||
-          stop.status === "arrived" ||
-          stop.status === "waiting_window" ||
-          stop.status === "unloading",
-      );
-      if (
-        route.shiftStatus === "assigned" ||
-        !target ||
-        target.status !== "en_route" ||
-        currentActive?.id !== stopId
-      ) {
-        return;
-      }
-
-      setRoute((prev) => {
-        const nextStops = prev.stops.map((stop) => {
-          if (stop.id !== stopId) return stop;
-
-          // Check if arrival is before window open
-          const isEarly = currentMinutes < stop.effectiveWindow[0];
-          const remainingHold = isEarly
-            ? stop.effectiveWindow[0] - currentMinutes
-            : 0;
-          const lateByMinutes = Math.max(0, currentMinutes - stop.effectiveWindow[1]);
-
-          return {
-            ...stop,
-            status: isEarly ? ("waiting_window" as const) : ("arrived" as const),
-            actualArrivalTimestamp: timeStr,
-            holdingRemainingMinutes: remainingHold,
-            deliveryWindowState: lateByMinutes > 0 ? ("breach" as const) : ("on_time" as const),
-            lateByMinutes,
-          };
-        });
-
-        return {
-          ...prev,
-          shiftStatus: "at_stop",
-          stops: nextStops,
-        };
-      });
-
-      const currentStop = route.stops.find((s) => s.id === stopId);
-      enqueueSyncItem(
-        "arrival",
-        `Arrived at ${currentStop?.outlet || stopId} at ${timeStr}`,
-        { stopId, arrivalTime: timeStr },
-        stopId,
-      );
-    },
-    [enqueueSyncItem, route.shiftStatus, route.stops],
-  );
-
-  // 3. Advance from Window Wait to Unloading
-  const unlockWindowHold = useCallback(
-    (stopId: string) => {
-      const { minutes } = getColomboClock();
-      setRoute((prev) => ({
-        ...prev,
-        stops: prev.stops.map((stop) =>
-          stop.id === stopId && minutes >= stop.effectiveWindow[0]
-            ? { ...stop, status: "arrived", holdingRemainingMinutes: 0 }
-            : stop,
-        ),
-      }));
-    },
-    [],
-  );
-
-  // Holding is mandatory, but the action gate unlocks automatically when the
-  // effective outlet/mall window opens.
   useEffect(() => {
-    const waiting = route.stops.some((stop) => stop.status === "waiting_window");
-    if (!waiting) return;
-    const updateHolds = () => {
-      const { minutes } = getColomboClock();
-      setRoute((prev) => {
-        let changed = false;
-        const stops = prev.stops.map((stop) => {
-          if (stop.status !== "waiting_window") return stop;
-          const remaining = Math.max(0, stop.effectiveWindow[0] - minutes);
-          const nextStatus: StopItem["status"] =
-            remaining === 0 ? "arrived" : "waiting_window";
-          if (
-            remaining === stop.holdingRemainingMinutes &&
-            nextStatus === stop.status
-          ) {
-            return stop;
-          }
-          changed = true;
-          return {
-            ...stop,
-            status: nextStatus,
-            holdingRemainingMinutes: remaining,
-          };
-        });
-        return changed ? { ...prev, stops } : prev;
+    void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "The assigned route could not be loaded.")).finally(() => setIsLoading(false));
+  }, [reload]);
+
+  useEffect(() => { window.localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(syncQueue)); }, [syncQueue]);
+  useEffect(() => { window.localStorage.setItem(OFFLINE_OVERRIDE_KEY, JSON.stringify(isSimulatedOffline)); }, [isSimulatedOffline]);
+  useEffect(() => { if (!effectiveOnline && route) window.localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify(route)); }, [effectiveOnline, route]);
+
+  const enqueue = useCallback((type: OfflineSyncItem["type"], description: string, payload: Record<string, unknown>, stopId?: string) => {
+    setSyncQueue((current) => [...current, {
+      id: crypto.randomUUID(), type, timestamp: new Date().toISOString(), stopId, description, payload,
+      synced: false, syncState: "pending", retryCount: 0,
+    }]);
+  }, []);
+
+  const triggerSync = useCallback(async () => {
+    if (!effectiveOnline || isSyncing) return;
+    const pending = syncQueue.filter((item) => !item.synced && item.syncState !== "conflict");
+    if (!pending.length) return;
+    setIsSyncing(true);
+    try {
+      const response = await apiRequest<SyncResponse>("/sync/mutations", {
+        method: "POST",
+        body: JSON.stringify({ mutations: pending.map(mutationFor) }),
       });
-    };
-    const initialTimer = window.setTimeout(updateHolds, 0);
-    const timer = window.setInterval(updateHolds, 30_000);
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(timer);
-    };
-  }, [route.stops]);
-
-  // 4. Complete Stop Delivery with Proof of Delivery
-  const completeDelivery = useCallback(
-    (stopId: string, pod: ProofOfDeliveryRecord) => {
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-      setRoute((prev) => {
-        const stopIndex = prev.stops.findIndex((s) => s.id === stopId);
-        if (stopIndex === -1) return prev;
-
-        const nextStops = [...prev.stops];
-        const currentStop = nextStops[stopIndex];
-        if (currentStop.status !== "arrived" && currentStop.status !== "unloading") {
-          return prev;
-        }
-        const status = pod.outcome === "full" ? "delivered" : "partial";
-
-        nextStops[stopIndex] = {
-          ...currentStop,
-          status,
-          actualCompletionTimestamp: timeStr,
-          pod,
-        };
-
-        // Advance next stop to en_route if available
-        let nextShiftStatus = prev.shiftStatus;
-        const nextStop = nextStops[stopIndex + 1];
-        if (nextStop && nextStop.status === "scheduled") {
-          nextStops[stopIndex + 1] = {
-            ...nextStop,
-            status: "en_route",
-          };
-          nextShiftStatus = "in_transit";
-        } else if (
-          nextStops.every((s) => s.status === "delivered" || s.status === "partial" || s.status === "exception")
-        ) {
-          nextShiftStatus = "returning";
-        }
-
-        return {
-          ...prev,
-          shiftStatus: nextShiftStatus,
-          stops: nextStops,
-        };
-      });
-
-      enqueueSyncItem(
-        "pod",
-        `Proof of Delivery verified for ${stopId} (${pod.outcome.toUpperCase()} - ${pod.deliveredCartons} cartons)`,
-        { stopId, pod, timeStr },
-        stopId,
-      );
-    },
-    [enqueueSyncItem],
-  );
-
-  // 5. Report Stop Exception or Failure
-  const reportException = useCallback(
-    (stopId: string, exception: StopExceptionRecord) => {
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-      setRoute((prev) => {
-        const stopIndex = prev.stops.findIndex((s) => s.id === stopId);
-        if (stopIndex === -1) return prev;
-
-        const nextStops = [...prev.stops];
-        const currentStop = nextStops[stopIndex];
-        if (
-          currentStop.status !== "arrived" &&
-          currentStop.status !== "unloading" &&
-          currentStop.status !== "en_route"
-        ) {
-          return prev;
-        }
-
-        nextStops[stopIndex] = {
-          ...currentStop,
-          status: "exception",
-          actualCompletionTimestamp: timeStr,
-          exception,
-        };
-
-        // If next stop exists, advance to en_route
-        let nextShiftStatus = prev.shiftStatus;
-        const nextStop = nextStops[stopIndex + 1];
-        if (nextStop && nextStop.status === "scheduled") {
-          nextStops[stopIndex + 1] = {
-            ...nextStop,
-            status: "en_route",
-          };
-          nextShiftStatus = "in_transit";
-        } else if (
-          nextStops.every((s) => s.status === "delivered" || s.status === "partial" || s.status === "exception")
-        ) {
-          nextShiftStatus = "returning";
-        }
-
-        return {
-          ...prev,
-          shiftStatus: nextShiftStatus,
-          stops: nextStops,
-        };
-      });
-
-      enqueueSyncItem(
-        "exception",
-        `Exception reported for ${stopId}: ${exception.reasonLabel}`,
-        { stopId, exception, timeStr },
-        stopId,
-      );
-    },
-    [enqueueSyncItem],
-  );
-
-  // 6. Report Transit Delay (Monsoon, Traffic, Breakdown)
-  const reportTransitDelay = useCallback(
-    (reason: string, minutes: number) => {
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-      setRoute((prev) => ({
-        ...prev,
-        transitDelayMinutes: prev.transitDelayMinutes + minutes,
-        delayNotice: {
-          reason,
-          minutes,
-          timestamp: timeStr,
-        },
-        // Drift downstream stop estimated arrivals
-        stops: prev.stops.map((stop) =>
-          stop.status === "scheduled" || stop.status === "en_route"
-            ? { ...stop, estimatedArrival: stop.estimatedArrival + minutes }
-            : stop,
-        ),
+      const byId = new Map(response.results.map((result) => [result.clientMutationId, result]));
+      setSyncQueue((current) => current.map((item) => {
+        const result = byId.get(item.id);
+        if (!result) return item;
+        const synced = result.status === "COMMITTED" || result.status === "ALREADY_COMMITTED";
+        return { ...item, synced, syncState: synced ? "synced" : "conflict", error: result.error, retryCount: item.retryCount + (synced ? 0 : 1) };
       }));
-
-      enqueueSyncItem(
-        "delay",
-        `Transit Delay +${minutes}m reported: ${reason}`,
-        { reason, minutes, timeStr },
-      );
-    },
-    [enqueueSyncItem],
-  );
-
-  // 7. Complete Pre-Trip Inspection
-  const completePreTrip = useCallback(
-    (checklist: PreTripChecklist) => {
-      setRoute((prev) => ({
-        ...prev,
-        preTripCompleted: true,
-      }));
-
-      enqueueSyncItem(
-        "pretrip",
-        `Pre-trip safety check verified by ${route.driver.name}`,
-        { checklist, driverId: route.driver.id },
-      );
-    },
-    [enqueueSyncItem, route.driver.name, route.driver.id],
-  );
-
-  // 8. Confirm Return to Depot & Close Trip
-  const completeRouteAndReturn = useCallback(() => {
-    if (
-      route.shiftStatus !== "returning" ||
-      route.stops.some(
-        (stop) =>
-          stop.status !== "delivered" &&
-          stop.status !== "partial" &&
-          stop.status !== "exception",
-      )
-    ) {
-      return;
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Field records could not be synchronized.");
+      setSyncQueue((current) => current.map((item) => pending.some((pendingItem) => pendingItem.id === item.id) ? { ...item, retryCount: item.retryCount + 1 } : item));
+    } finally {
+      setIsSyncing(false);
     }
-    const timeStr = getColomboClock().label;
+  }, [effectiveOnline, isSyncing, reload, syncQueue]);
 
-    const deliveredStops = route.stops.filter((s) => s.status === "delivered" || s.status === "partial").length;
-    const exceptionStops = route.stops.filter((s) => s.status === "exception").length;
-    const totalDeliveredKg = route.stops.reduce(
-      (sum, s) => (s.status === "delivered" || s.status === "partial" ? sum + s.totalKg : sum),
-      0,
-    );
-    const totalDeliveredCartons = route.stops.reduce(
-      (sum, s) =>
-        s.pod
-          ? sum + s.pod.deliveredCartons
-          : s.status === "delivered"
-            ? sum + s.totalCartons
-            : sum,
-      0,
-    );
+  useEffect(() => {
+    if (!effectiveOnline || isSyncing || !syncQueue.some((item) => !item.synced && item.syncState !== "conflict")) return;
+    const timer = window.setTimeout(() => void triggerSync(), 250);
+    return () => window.clearTimeout(timer);
+  }, [effectiveOnline, isSyncing, syncQueue, triggerSync]);
 
-    const summary: CompletedTripSummary = {
+  const completePreTrip = useCallback((checklist: PreTripChecklist) => {
+    if (!route) return;
+    setRoute((current) => current ? { ...current, preTripCompleted: true } : current);
+    enqueue("pretrip", `Readiness confirmed for ${route.vehicle.id}`, {
       tripId: route.tripId,
-      date: new Date().toISOString().slice(0, 10),
-      brand: route.brand,
-      district: route.district,
-      vehicleId: route.vehicle.id,
-      stopsCount: route.stops.length,
-      deliveredCount: deliveredStops,
-      exceptionCount: exceptionStops,
-      totalKg: totalDeliveredKg,
-      totalCartons: totalDeliveredCartons,
-      durationMinutes: route.elapsedMinutes,
-      completedAt: timeStr,
-    };
+      vehicleRoadworthy: checklist.tiresOk && checklist.mirrorsAndLightsOk,
+      manifestAndSealMatched: checklist.lifoSealsVerified,
+      fuelConfirmed: checklist.fuelLevelConfirmed,
+      reeferTemperatureConfirmed: checklist.reeferTempVerified,
+    });
+  }, [enqueue, route]);
 
-    setHistory((prev) =>
-      prev.some((trip) => trip.tripId === summary.tripId)
-        ? prev
-        : [summary, ...prev],
-    );
-    setRoute((prev) => ({
-      ...prev,
-      shiftStatus: "completed",
-      nextTrip: prev.nextTrip
-        ? { ...prev.nextTrip, releaseStatus: "awaiting_loader" }
-        : undefined,
-    }));
+  const startRoute = useCallback(() => {
+    if (!route?.loaderClearance.cleared || !route.preTripCompleted) return;
+    setRoute((current) => current ? { ...current, shiftStatus: "in_transit", departureActualTimestamp: timeLabel(new Date().toISOString()), stops: current.stops.map((stop, index) => index === 0 ? { ...stop, status: "en_route" } : stop) } : current);
+    enqueue("departure", `Departed ${route.depot} depot`, { tripId: route.tripId });
+  }, [enqueue, route]);
 
-    enqueueSyncItem(
-      "trip_complete",
-      `Route ${route.tripId} completed at ${route.depot} DC (${deliveredStops}/${route.stops.length} delivered)`,
-      { summary },
-    );
-  }, [enqueueSyncItem, route]);
+  const arriveAtStop = useCallback((stopId: string) => {
+    if (!route) return;
+    const stop = route.stops.find((candidate) => candidate.id === stopId);
+    if (!stop || stop.status !== "en_route") return;
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    setRoute((current) => current ? { ...current, shiftStatus: "at_stop", stops: current.stops.map((item) => item.id === stopId ? { ...item, status: currentMinutes < item.effectiveWindow[0] ? "waiting_window" : "arrived", holdingRemainingMinutes: Math.max(0, item.effectiveWindow[0] - currentMinutes), actualArrivalTimestamp: timeLabel(now.toISOString()) } : item) } : current);
+    enqueue("arrival", `Arrived at ${stop.outlet}`, { stopId, currentLatitude: stop.coordinates.lat, currentLongitude: stop.coordinates.lng }, stopId);
+  }, [enqueue, route]);
 
-  // Reset to demo initial state
-  const resetDemoState = useCallback(() => {
-    setRoute(initialActiveRoute);
-    setSyncQueue(sampleInitialSyncQueue);
-    setHistory(sampleHistoryTrips);
-    setIsSimulatedOffline(false);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(ROUTE_STORAGE_KEY);
-      localStorage.removeItem(SYNC_STORAGE_KEY);
-      localStorage.removeItem(HISTORY_STORAGE_KEY);
-      localStorage.removeItem(OFFLINE_OVERRIDE_KEY);
-    }
+  const unlockWindowHold = useCallback((stopId: string) => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    setRoute((current) => current ? { ...current, stops: current.stops.map((stop) => stop.id === stopId && currentMinutes >= stop.effectiveWindow[0] ? { ...stop, status: "arrived", holdingRemainingMinutes: 0 } : stop) } : current);
   }, []);
 
-  const toggleSimulatedOffline = useCallback(() => {
-    setIsSimulatedOffline((prev) => !prev);
-  }, []);
+  const completeDelivery = useCallback((stopId: string, pod: ProofOfDeliveryRecord) => {
+    if (!route) return;
+    setRoute((current) => {
+      if (!current) return current;
+      const stops = current.stops.map((stop) => stop.id === stopId ? { ...stop, status: pod.outcome === "full" ? "delivered" as const : "partial" as const, pod, actualCompletionTimestamp: timeLabel(pod.timestamp) } : stop);
+      const index = stops.findIndex((stop) => stop.id === stopId);
+      if (stops[index + 1]?.status === "scheduled") stops[index + 1] = { ...stops[index + 1], status: "en_route" };
+      return { ...current, stops, shiftStatus: stops.every((stop) => ["delivered", "partial", "exception"].includes(stop.status)) ? "returning" : "in_transit" };
+    });
+    enqueue("pod", `Proof of delivery recorded for ${stopId}`, {
+      stopId,
+      storeRepName: pod.recipientName,
+      storeRepDesignation: pod.recipientDesignation,
+      outcome: pod.outcome.toUpperCase(),
+      expectedCartons: pod.expectedCartons,
+      deliveredCartons: pod.deliveredCartons,
+      storeRepSignatureUrl: pod.signatureDataUrl,
+      photoEvidenceUrl: pod.photoDataUrl,
+      driverNotes: pod.notes,
+      geoLatitude: pod.geoCoordinates?.lat ?? route.stops.find((stop) => stop.id === stopId)?.coordinates.lat,
+      geoLongitude: pod.geoCoordinates?.lng ?? route.stops.find((stop) => stop.id === stopId)?.coordinates.lng,
+      clientCapturedAt: pod.timestamp,
+    }, stopId);
+  }, [enqueue, route]);
 
-  // Compute active stop
-  const activeStop: StopItem | undefined =
-    route.stops.find(
-      (s) => s.status === "en_route" || s.status === "arrived" || s.status === "waiting_window" || s.status === "unloading",
-    ) || route.stops.find((s) => s.status === "scheduled");
+  const reportException = useCallback((stopId: string, exception: StopExceptionRecord) => {
+    if (!route) return;
+    setRoute((current) => {
+      if (!current) return current;
+      const stops = current.stops.map((stop) => stop.id === stopId ? { ...stop, status: "exception" as const, exception, actualCompletionTimestamp: timeLabel(exception.reportedAt) } : stop);
+      const index = stops.findIndex((stop) => stop.id === stopId);
+      if (stops[index + 1]?.status === "scheduled") stops[index + 1] = { ...stops[index + 1], status: "en_route" };
+      return { ...current, stops, shiftStatus: stops.every((stop) => ["delivered", "partial", "exception"].includes(stop.status)) ? "returning" : "in_transit" };
+    });
+    enqueue("exception", `Exception recorded for ${stopId}`, { stopId, failureReason: exception.code, driverNotes: exception.notes, photoEvidenceUrl: exception.photoDataUrl, affectedCartons: exception.affectedCartons }, stopId);
+  }, [enqueue, route]);
 
-  const completedCount = route.stops.filter(
-    (s) => s.status === "delivered" || s.status === "partial" || s.status === "exception",
-  ).length;
+  const reportTransitDelay = useCallback((reason: string, delayMinutes: number) => {
+    if (!route) return;
+    const stop = route.stops.find((candidate) => ["en_route", "arrived", "waiting_window", "unloading", "scheduled"].includes(candidate.status));
+    if (!stop) return;
+    setRoute((current) => current ? { ...current, transitDelayMinutes: current.transitDelayMinutes + delayMinutes, delayNotice: { reason, minutes: delayMinutes, timestamp: timeLabel(new Date().toISOString()) ?? "" }, stops: current.stops.map((item) => ["scheduled", "en_route"].includes(item.status) ? { ...item, estimatedArrival: item.estimatedArrival + delayMinutes } : item) } : current);
+    enqueue("delay", `${delayMinutes} minute delay: ${reason}`, { stopId: stop.id, delayMinutes, reason }, stop.id);
+  }, [enqueue, route]);
 
-  const unsyncedCount = syncQueue.filter((i) => !i.synced).length;
+  const completeRouteAndReturn = useCallback(() => {
+    if (!route || route.shiftStatus !== "returning") return;
+    enqueue("trip_complete", `Returned to ${route.depot} depot`, { tripId: route.tripId, latitude: route.depotCoordinates.lat, longitude: route.depotCoordinates.lng });
+    setRoute((current) => current ? { ...current, shiftStatus: "completed" } : current);
+  }, [enqueue, route]);
+
+  const activeStop = useMemo(() => route?.stops.find((stop) => ["en_route", "arrived", "waiting_window", "unloading"].includes(stop.status)) ?? route?.stops.find((stop) => stop.status === "scheduled"), [route]);
+  const completedCount = route?.stops.filter((stop) => ["delivered", "partial", "exception"].includes(stop.status)).length ?? 0;
+  const unsyncedCount = syncQueue.filter((item) => !item.synced).length;
 
   return {
-    route,
-    syncQueue,
-    history,
-    effectiveOnline,
-    isSimulatedOffline,
-    isSyncing,
-    activeStop,
-    completedCount,
-    unsyncedCount,
-    startRoute,
-    arriveAtStop,
-    unlockWindowHold,
-    completeDelivery,
-    reportException,
-    reportTransitDelay,
-    completePreTrip,
-    completeRouteAndReturn,
-    triggerSync,
-    toggleSimulatedOffline,
-    resetDemoState,
+    route, syncQueue, history, effectiveOnline, isSimulatedOffline, isSyncing, isLoading, error,
+    activeStop, completedCount, unsyncedCount, startRoute, arriveAtStop, unlockWindowHold,
+    completeDelivery, reportException, reportTransitDelay, completePreTrip, completeRouteAndReturn,
+    triggerSync, toggleSimulatedOffline: () => setIsSimulatedOffline((current) => !current), reload,
   };
 }

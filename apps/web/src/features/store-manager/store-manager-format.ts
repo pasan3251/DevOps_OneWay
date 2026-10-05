@@ -24,6 +24,11 @@ export const orderStatusMeta: Record<
     detail: "Dispatch has allocated a vehicle and delivery window.",
     tone: "active",
   },
+  LOADED: {
+    label: "Loaded",
+    detail: "Warehouse verification and departure clearance are complete.",
+    tone: "active",
+  },
   IN_TRANSIT: {
     label: "In transit",
     detail: "The vehicle has departed and the ETA may continue to update.",
@@ -33,6 +38,21 @@ export const orderStatusMeta: Record<
     label: "Delivered",
     detail: "Review proof of delivery and report any physical difference.",
     tone: "complete",
+  },
+  FAILED: {
+    label: "Delivery exception",
+    detail: "The driver could not complete this delivery.",
+    tone: "blocked",
+  },
+  RECEIVED: {
+    label: "Receipt confirmed",
+    detail: "The store confirmed a correct physical handover.",
+    tone: "complete",
+  },
+  DISPUTED: {
+    label: "Receiving discrepancy",
+    detail: "The store reported a difference after handover.",
+    tone: "blocked",
   },
   DEFICIT_PENDING: {
     label: "Deferred to next run",

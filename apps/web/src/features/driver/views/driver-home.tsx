@@ -133,7 +133,7 @@ export function DriverHome({
           <div className="driver-next-metrics">
             <div><Clock size={14} /><span>Window<strong>{formatMinutesToTime(activeStop.effectiveWindow[0])}–{formatMinutesToTime(activeStop.effectiveWindow[1])}</strong></span></div>
             <div><Package size={14} /><span>Handover<strong>{activeStop.totalCartons} cartons</strong></span></div>
-            {route.vehicle.chilled && <div><Thermometer size={14} /><span>Reefer<strong>{route.vehicle.reeferTemperatureC.toFixed(1)}°C</strong></span></div>}
+            {route.vehicle.chilled && <div><Thermometer size={14} /><span>Reefer<strong>{route.vehicle.reeferTemperatureC === null ? "Check gauge" : `${route.vehicle.reeferTemperatureC.toFixed(1)}°C`}</strong></span></div>}
           </div>
           <div className="driver-action-row">
             {activeStop.status === "en_route" && (
@@ -210,7 +210,7 @@ export function DriverHome({
         <div className="driver-progress-facts">
           <span><strong>{remainingCartons}</strong> cartons remaining</span>
           <span><strong>{formatMinutesDuration(Math.max(0, route.shiftBudgetMinutes - route.elapsedMinutes))}</strong> budget left</span>
-          <span><strong>{route.returnDistanceKm.toFixed(1)} km</strong> return leg</span>
+          <span><strong>{route.returnDistanceKm === null ? "Included" : `${route.returnDistanceKm.toFixed(1)} km`}</strong> return leg</span>
         </div>
       </section>
 

@@ -43,3 +43,17 @@ export class StoreDeliveryFilterDto {
   @IsOptional()
   status?: string;
 }
+
+export class ConfirmReceiptDto {
+  @IsUUID()
+  @IsNotEmpty()
+  orderId!: string;
+
+  @IsUUID()
+  @IsNotEmpty()
+  tripStopId!: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}

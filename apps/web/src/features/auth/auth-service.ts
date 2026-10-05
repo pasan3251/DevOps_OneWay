@@ -1,87 +1,139 @@
-import { demoAccounts, DEMO_PASSWORD, isRole, type Role } from "./accounts";
+import { apiRequest, clearApiTokens, hasApiTokens, publicApiRequest, storeApiTokens, type ApiTokens } from "@/lib/api-client";
+import { demoAccounts, isRole, type Role } from "./accounts";
 
-export type Session = { role: Role; name: string; expiresAt: number };
-export type SignInInput = {
-  identifier: string;
-  password: string;
-  remember: boolean;
+export interface Profile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: "admin" | "dispatcher" | "loader" | "driver" | "store_manager";
+  phone?: string | null;
+  depotId?: string | null;
+  outletId?: string | null;
+  depot?: { id: string; name: string; code: string } | null;
+  outlet?: { id: string; name: string; code: string } | null;
+  driverProfile?: { id: string; licenseNumber: string } | null;
+}
+
+export type Session = {
+  userId: string;
+  role: Role;
+  name: string;
+  email: string;
+  phone?: string | null;
+  location: string;
+  depotId?: string | null;
+  outletId?: string | null;
+  expiresAt: number;
 };
+
+export type SignInInput = { identifier: string; password: string; remember: boolean };
 export interface AuthService {
   signIn(input: SignInInput): Promise<Session>;
   getSession(): Session | null;
+  refreshProfile(): Promise<Session>;
   signOut(): void;
 }
 
-const SESSION_KEY = "waypoint.demo.session.v1";
+const SESSION_KEY = "waypoint.session.v1";
 
-/** Frontend-only adapter. Replace with server authentication before deployment. */
-class DemoAuthService implements AuthService {
-  async signIn({
-    identifier,
-    password,
-    remember,
-  }: SignInInput): Promise<Session> {
-    await new Promise((resolve) => setTimeout(resolve, 450));
-    const normalized = identifier.trim().toLowerCase();
-    const account = demoAccounts.find(
-      (entry) =>
-        entry.email === normalized ||
-        entry.employeeId.toLowerCase() === normalized,
-    );
-    if (!account || password !== DEMO_PASSWORD) {
-      throw new Error(
-        "These details don’t match a demo account. Check your details or choose a demo role below.",
-      );
-    }
-    const session: Session = {
-      role: account.role,
-      name: account.name,
-      expiresAt: Date.now() + (remember ? 7 * 24 : 12) * 60 * 60 * 1000,
-    };
-    try {
-      this.signOut();
-      const storage = remember ? window.localStorage : window.sessionStorage;
-      storage.setItem(SESSION_KEY, JSON.stringify(session));
-    } catch {
-      throw new Error(
-        "Your browser couldn’t save this session. Allow site storage, then try again.",
-      );
-    }
-    return session;
-  }
+function frontendRole(role: Profile["role"]): Role {
+  if (role === "store_manager") return "store-manager";
+  if (role === "admin") return "dispatcher";
+  return role;
+}
 
-  getSession(): Session | null {
-    if (typeof window === "undefined") return null;
-    try {
-      for (const storage of [window.sessionStorage, window.localStorage]) {
-        const raw = storage.getItem(SESSION_KEY);
-        if (!raw) continue;
-        const value: unknown = JSON.parse(raw);
-        if (
-          typeof value === "object" &&
-          value !== null &&
-          "role" in value &&
-          isRole(value.role) &&
-          "name" in value &&
-          typeof value.name === "string" &&
-          "expiresAt" in value &&
-          typeof value.expiresAt === "number" &&
-          value.expiresAt > Date.now()
-        ) {
-          return value as Session;
-        }
-        storage.removeItem(SESSION_KEY);
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  }
-
-  signOut(): void {
-    window.sessionStorage.removeItem(SESSION_KEY);
-    window.localStorage.removeItem(SESSION_KEY);
+function sessionExpiry(accessToken: string) {
+  try {
+    const encoded = accessToken.split(".")[1];
+    const payload = JSON.parse(atob(encoded.replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: number };
+    return payload.exp ? payload.exp * 1000 : Date.now() + 12 * 60 * 60 * 1000;
+  } catch {
+    return Date.now() + 12 * 60 * 60 * 1000;
   }
 }
 
-export const authService: AuthService = new DemoAuthService();
+function toSession(profile: Profile, accessToken: string): Session {
+  return {
+    userId: profile.id,
+    role: frontendRole(profile.role),
+    name: `${profile.firstName} ${profile.lastName}`.trim(),
+    email: profile.email,
+    phone: profile.phone,
+    location: profile.outlet?.name ?? profile.depot?.name ?? "Waypoint operations",
+    depotId: profile.depotId,
+    outletId: profile.outletId,
+    expiresAt: sessionExpiry(accessToken),
+  };
+}
+
+function storedSession(): { session: Session; storage: Storage } | null {
+  if (typeof window === "undefined") return null;
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    const raw = storage.getItem(SESSION_KEY);
+    if (!raw) continue;
+    try {
+      const value: unknown = JSON.parse(raw);
+      if (
+        typeof value === "object" && value !== null &&
+        "role" in value && isRole(value.role) &&
+        "expiresAt" in value && typeof value.expiresAt === "number"
+      ) {
+        return { session: value as Session, storage };
+      }
+    } catch {
+      storage.removeItem(SESSION_KEY);
+    }
+  }
+  return null;
+}
+
+class ApiAuthService implements AuthService {
+  async signIn({ identifier, password, remember }: SignInInput) {
+    const normalized = identifier.trim().toLowerCase();
+    const account = demoAccounts.find((candidate) => candidate.employeeId.toLowerCase() === normalized);
+    const email = account?.email ?? normalized;
+    const tokens = await publicApiRequest<ApiTokens>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    storeApiTokens(tokens, remember);
+    try {
+      const profile = await apiRequest<Profile>("/auth/me");
+      const session = toSession(profile, tokens.accessToken);
+      (remember ? window.localStorage : window.sessionStorage).setItem(SESSION_KEY, JSON.stringify(session));
+      return session;
+    } catch (error) {
+      this.signOut();
+      throw error;
+    }
+  }
+
+  getSession() {
+    const entry = storedSession();
+    if (!entry || !hasApiTokens()) return null;
+    if (entry.session.expiresAt <= Date.now()) {
+      this.signOut();
+      return null;
+    }
+    return entry.session;
+  }
+
+  async refreshProfile() {
+    const entry = storedSession();
+    if (!entry || !hasApiTokens()) throw new Error("Your session has expired. Sign in again.");
+    const profile = await apiRequest<Profile>("/auth/me");
+    const session = { ...toSession(profile, ""), expiresAt: entry.session.expiresAt };
+    entry.storage.setItem(SESSION_KEY, JSON.stringify(session));
+    return session;
+  }
+
+  signOut() {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.removeItem(SESSION_KEY);
+    window.localStorage.removeItem(SESSION_KEY);
+    clearApiTokens();
+  }
+}
+
+export const authService: AuthService = new ApiAuthService();

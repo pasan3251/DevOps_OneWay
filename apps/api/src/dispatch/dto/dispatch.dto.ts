@@ -8,10 +8,16 @@ import {
   Min,
   IsOptional,
   IsString,
+  MaxLength,
+  ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PlanTripDto {
+  @IsOptional()
+  @IsUUID()
+  planVersionId?: string;
+
   @IsUUID()
   @IsNotEmpty()
   depotId!: string;
@@ -36,9 +42,9 @@ export class PlanTripDto {
   @IsNotEmpty()
   operatingDate!: string;
 
-  @IsInt()
-  @Min(1)
-  plannedDurationMin!: number;
+  @IsOptional()
+  @IsDateString()
+  plannedDepartureTime?: string;
 
   @IsArray()
   @IsUUID('4', { each: true })
@@ -51,9 +57,54 @@ export class DeferOrderDto {
   @IsNotEmpty()
   orderId!: string;
 
+  @IsEnum([
+    'CAPACITY_UNAVAILABLE',
+    'VEHICLE_UNAVAILABLE',
+    'DELIVERY_WINDOW',
+    'OPERATIONAL_CONSTRAINT',
+    'OTHER',
+  ])
+  reasonCode!: 'CAPACITY_UNAVAILABLE' | 'VEHICLE_UNAVAILABLE' | 'DELIVERY_WINDOW' | 'OPERATIONAL_CONSTRAINT' | 'OTHER';
+
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   deferralReason!: string;
+}
+
+export class CreatePlanDto {
+  @IsUUID()
+  depotId!: string;
+
+  @IsDateString()
+  operatingDate!: string;
+}
+
+export class RevisePlanDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  reason!: string;
+}
+
+export class UpdateTripDto {
+  @IsOptional()
+  @IsUUID()
+  vehicleId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  driverId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  plannedDepartureTime?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  orderIds?: string[];
 }
 
 export class TripFilterDto {

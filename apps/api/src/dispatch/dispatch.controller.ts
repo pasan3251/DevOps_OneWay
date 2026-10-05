@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -11,9 +13,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DispatchService } from './dispatch.service';
-import { PlanTripDto, DeferOrderDto, TripFilterDto } from './dto/dispatch.dto';
+import { CreatePlanDto, PlanTripDto, DeferOrderDto, RevisePlanDto, TripFilterDto, UpdateTripDto } from './dto/dispatch.dto';
 import { Roles } from '../common/decorators/roles.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 
 @ApiTags('Dispatch')
@@ -22,6 +24,40 @@ import { RolesGuard } from '../common/guards/roles.guard';
 @Controller('dispatch')
 export class DispatchController {
   constructor(private readonly dispatchService: DispatchService) {}
+
+  @Post('plans')
+  @Roles('dispatcher', 'admin')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create or retrieve the editable plan version for a depot and day' })
+  createPlan(@Body() dto: CreatePlanDto, @CurrentUser('id') userId: string) {
+    return this.dispatchService.createPlan(dto, userId);
+  }
+
+  @Post('plans/:id/validate')
+  @Roles('dispatcher', 'admin')
+  @ApiOperation({ summary: 'Validate a draft plan before publication' })
+  validatePlan(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.dispatchService.validatePlan(id, userId);
+  }
+
+  @Post('plans/:id/publish')
+  @Roles('dispatcher', 'admin')
+  @ApiOperation({ summary: 'Publish an authoritative plan version and release manifests' })
+  publishPlan(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.dispatchService.publishPlan(id, userId);
+  }
+
+  @Post('plans/:id/revisions')
+  @Roles('dispatcher', 'admin')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a traceable revision from a published plan' })
+  revisePlan(
+    @Param('id') id: string,
+    @Body() dto: RevisePlanDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.dispatchService.revisePlan(id, dto, userId);
+  }
 
   @Post('plan')
   @Roles('dispatcher', 'admin')
@@ -47,18 +83,47 @@ export class DispatchController {
     return this.dispatchService.deferOrder(dto, userId);
   }
 
+  @Post('defer/:orderId/reinstate')
+  @Roles('dispatcher', 'admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Return a deferred order to the planning backlog' })
+  reinstateOrder(
+    @Param('orderId') orderId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.dispatchService.reinstateOrder(orderId, userId);
+  }
+
   @Get('trips')
   @Roles('dispatcher', 'admin', 'loader')
   @ApiOperation({ summary: 'List and filter planned trips with stops and vehicles' })
-  async listTrips(@Query() filter: TripFilterDto) {
-    return this.dispatchService.listTrips(filter);
+  async listTrips(@Query() filter: TripFilterDto, @CurrentUser() user: RequestUser) {
+    return this.dispatchService.listTrips(filter, user);
   }
 
   @Get('trips/:id')
   @Roles('dispatcher', 'admin', 'loader', 'driver')
   @ApiOperation({ summary: 'Get comprehensive trip manifest and stops details' })
-  async getTripById(@Param('id') id: string) {
-    return this.dispatchService.getTripById(id);
+  async getTripById(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.dispatchService.getTripById(id, user);
+  }
+
+  @Patch('trips/:id')
+  @Roles('dispatcher', 'admin')
+  @ApiOperation({ summary: 'Update an editable plan trip and recalculate its authoritative route estimates' })
+  updateTrip(
+    @Param('id') id: string,
+    @Body() dto: UpdateTripDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.dispatchService.updateTrip(id, dto, userId);
+  }
+
+  @Delete('trips/:id')
+  @Roles('dispatcher', 'admin')
+  @ApiOperation({ summary: 'Remove an editable draft trip and return its orders to the backlog' })
+  removeTrip(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.dispatchService.removeTrip(id, userId);
   }
 
   @Post('trips/:id/lock')

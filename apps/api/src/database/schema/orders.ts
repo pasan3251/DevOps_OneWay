@@ -20,6 +20,7 @@ export const orders = pgTable('orders', {
   deferredCount: integer('deferred_count').notNull().default(0),
   lastDeferredDate: date('last_deferred_date'),
   deferralReason: varchar('deferral_reason', { length: 255 }),
+  deferralReasonCode: varchar('deferral_reason_code', { length: 64 }),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

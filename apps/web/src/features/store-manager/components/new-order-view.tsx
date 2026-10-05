@@ -57,8 +57,8 @@ export function NewOrderView({
   );
   const initialTemperature: Temperature =
     outlet.brand === "Fresh" &&
-    firstDateOrders.some((order) => order.tempRequirement === "ambient") &&
-    !firstDateOrders.some((order) => order.tempRequirement === "chilled")
+      firstDateOrders.some((order) => order.tempRequirement === "ambient") &&
+      !firstDateOrders.some((order) => order.tempRequirement === "chilled")
       ? "chilled"
       : "ambient";
   const [step, setStep] = useState<OrderStep>(1);

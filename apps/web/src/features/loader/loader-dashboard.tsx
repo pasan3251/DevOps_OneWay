@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -27,6 +27,7 @@ import { authService, type Session } from "@/features/auth/auth-service";
 import {
   DEMO_DATE,
   initialPlan,
+  orders,
   planningService,
   type Depot,
   type Plan,
@@ -38,6 +39,7 @@ import {
 } from "@/features/dispatcher/workspace-state";
 import { WorkspaceChat } from "@/features/dispatcher/workspace-chat";
 import { WorkspaceTools } from "@/features/dispatcher/workspace-tools";
+import { SharedAccountTools } from "@/features/shared/account-tools";
 import { LoaderOverview } from "./loader-overview";
 import {
   LoaderManifest,
@@ -46,6 +48,7 @@ import {
   type ManifestVerification,
 } from "./loader-manifest";
 import { LoaderDiscrepancies } from "./loader-discrepancies";
+import { loaderApi, type LoadingExceptionRecord } from "./loader-api";
 
 import "@/features/dispatcher/dispatcher.css";
 import "@/features/dispatcher/workspace.css";
@@ -56,9 +59,19 @@ import "./loader.css";
 
 type LoaderView = "overview" | "manifest" | "discrepancies" | "chat";
 
-const LOADER_DISCREPANCIES_KEY = "waypoint.demo.loader.discrepancies.v1";
-const LOADER_CLEARANCES_KEY = "waypoint.demo.loader.clearances.v1";
-const LOADER_VERIFICATIONS_KEY = "waypoint.demo.loader.verifications.v1";
+function exceptionType(type: LoadingExceptionRecord["type"]): DiscrepancyRecord["type"] {
+  if (type === "DAMAGE") return "damaged";
+  if (type === "TEMPERATURE") return "temperature_breach";
+  return "missing";
+}
+
+function resolution(value?: string | null): DiscrepancyRecord["resolution"] {
+  const normalized = value?.toLowerCase().replaceAll(" ", "_");
+  if (normalized === "ship_partial") return "ship_partial";
+  if (normalized === "hold_replacement") return "hold_replacement";
+  if (normalized === "emergency_defer") return "emergency_defer";
+  return "pending";
+}
 
 export function LoaderDashboard() {
   const router = useRouter();
@@ -75,28 +88,66 @@ export function LoaderDashboard() {
   const [message, setMessage] = useState("");
   const [failure, setFailure] = useState("");
   const [modal, setModal] = useState<"help" | null>(null);
-  const [discrepancies, setDiscrepancies] = useState<DiscrepancyRecord[]>([
-    {
-      id: "DISC-INIT-1",
-      tripId: "TRIP-01",
-      orderId: "ORD-1041",
-      outlet: "Fresh · Borella",
-      depot: "Peliyagoda",
-      vehicleId: "WP-012",
-      type: "damaged",
-      quantity: 2,
-      itemDescription: "Chilled Dairy Crates",
-      skuCode: "SKU-CHL-01",
-      kgImpact: 20,
-      m3Impact: 0.1,
-      notes: "Crushed during forklift pallet transfer",
-      reportedBy: "LOAD001 (Warehouse Dock)",
-      timestamp: "04:15",
-      resolution: "ship_partial",
-      resolutionNotes: "Dispatch authorised a reduced manifest. Re-verify the affected stop before clearance.",
-      resolvedAt: "04:21",
-    },
-  ]);
+  const [discrepancies, setDiscrepancies] = useState<DiscrepancyRecord[]>([]);
+
+  const reloadLoader = useCallback(async () => {
+    const loaded = await planningService.loadLoader();
+    setPlan(loaded);
+    setSelectedTripId((current) =>
+      loaded.trips.some((trip) => trip.id === current) ? current : (loaded.trips[0]?.id ?? "")
+    );
+
+    const details = await Promise.all(
+      loaded.trips
+        .filter((trip) => trip.recordId)
+        .map(async (trip) => ({ trip, detail: await loaderApi.getManifest(trip.recordId!) }))
+    );
+    const nextClearances: Record<string, ClearanceRecord> = {};
+    const nextDiscrepancies: DiscrepancyRecord[] = [];
+    for (const { trip, detail } of details) {
+      if (["CLEARED", "DRIVER_READY", "EN_ROUTE", "RETURNING", "COMPLETED"].includes(trip.status ?? "")) {
+        nextClearances[trip.id] = {
+          tripId: trip.id,
+          vehicleId: trip.vehicleId,
+          clearedAt: detail.manifest.clearedAt
+            ? new Date(detail.manifest.clearedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+            : "Recorded",
+          clearedBy: "Warehouse loading team",
+          totalStops: trip.orderIds.length,
+          finalKg: 0,
+          finalM3: 0,
+          exceptionsCount: detail.loadingExceptions.length,
+        };
+      }
+      for (const item of detail.loadingExceptions) {
+        const order = orders.find((candidate) => candidate.id === item.orderId);
+        nextDiscrepancies.push({
+          id: item.id,
+          tripId: trip.id,
+          orderId: item.orderId,
+          outlet: order?.outlet ?? "Published stop",
+          depot: trip.depot,
+          vehicleId: trip.vehicleId,
+          type: exceptionType(item.type),
+          quantity: item.affectedQuantity,
+          itemDescription: item.affectedSku ?? "Manifest item",
+          skuCode: item.affectedSku ?? undefined,
+          kgImpact: 0,
+          m3Impact: 0,
+          notes: item.notes,
+          reportedBy: "Warehouse loading team",
+          timestamp: new Date(item.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+          resolution: item.status === "OPEN" ? "pending" : resolution(item.resolution),
+          resolutionNotes: item.resolution ?? undefined,
+          resolvedAt: item.resolvedAt
+            ? new Date(item.resolvedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+            : undefined,
+        });
+      }
+    }
+    setClearedTrips(nextClearances);
+    setDiscrepancies(nextDiscrepancies);
+  }, []);
 
   // Auth & state hydration
   useEffect(() => {
@@ -113,46 +164,21 @@ export function LoaderDashboard() {
     const timer = window.setTimeout(() => {
       setSession(active);
       try {
-        setPlan(planningService.load());
-      } catch {
-        setFailure("Your saved demo plan couldn't be loaded.");
-      }
-      try {
         setWorkspace(workspaceService.load());
       } catch {
         setFailure("Workspace preferences could not be loaded.");
-      }
-      try {
-        const storedDisc = localStorage.getItem(LOADER_DISCREPANCIES_KEY);
-        if (storedDisc) {
-          setDiscrepancies(JSON.parse(storedDisc));
-        }
-      } catch {
-        // use initial
-      }
-      try {
-        const storedClearances = localStorage.getItem(LOADER_CLEARANCES_KEY);
-        if (storedClearances) {
-          const records: ClearanceRecord[] = JSON.parse(storedClearances);
-          const map: Record<string, ClearanceRecord> = {};
-          records.forEach((r) => { map[r.tripId] = r; });
-          setClearedTrips(map);
-        }
-      } catch {
-        // use initial
-      }
-      try {
-        const storedVerifications = localStorage.getItem(LOADER_VERIFICATIONS_KEY);
-        if (storedVerifications) {
-          setVerifications(JSON.parse(storedVerifications));
-        }
-      } catch {
-        // use initial
       }
     }, 0);
 
     return () => window.clearTimeout(timer);
   }, [router]);
+
+  useEffect(() => {
+    if (!session) return;
+    void reloadLoader().catch((error: unknown) => {
+      setFailure(error instanceof Error ? error.message : "Published manifests could not be loaded.");
+    });
+  }, [reloadLoader, session]);
 
   useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0 });
@@ -172,66 +198,42 @@ export function LoaderDashboard() {
     }
   }
 
-  function handleAddDiscrepancy(record: DiscrepancyRecord) {
-    const updated = [record, ...discrepancies];
-    setDiscrepancies(updated);
+  async function handleAddDiscrepancy(record: DiscrepancyRecord) {
+    const tripId = plan.trips.find((trip) => trip.id === record.tripId)?.recordId;
+    if (!tripId) {
+      setFailure("The published trip could not be found.");
+      return;
+    }
     try {
-      localStorage.setItem(LOADER_DISCREPANCIES_KEY, JSON.stringify(updated));
-      setMessage(`FAIL-A Exception ${record.id} logged. Transmitted to Dispatch desk.`);
-
-      // Also append simulated message to planning desk in workspace.chat
-      const chatMsg = {
-        id: crypto.randomUUID(),
-        contactId: "dispatch-desk",
-        text: `[FAIL-A EXCEPTION] ${record.id}: ${record.quantity}x ${record.itemDescription} (${record.type}) at ${record.outlet} on ${record.tripId}. Impact: -${record.kgImpact}kg, -${record.m3Impact}m³. Awaiting dispatch resolution.`,
-        outgoing: true,
-        at: new Date().toISOString(),
-      };
-      saveWorkspace(
-        {
-          ...workspace,
-          messages: [...workspace.messages, chatMsg],
-        },
-        `Exception ${record.id} reported to Dispatch desk.`
-      );
-    } catch {
-      // storage fallback
+      const created = await loaderApi.reportException(tripId, record);
+      await reloadLoader();
+      setFailure("");
+      setMessage(`Exception ${created.id} was recorded and Dispatch was notified.`);
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "The loading exception could not be recorded.");
     }
   }
 
-  function handleClearDeparture(tripId: string, clearance: ClearanceRecord) {
-    const updated = { ...clearedTrips, [tripId]: clearance };
-    setClearedTrips(updated);
-    try {
-      // Persist the full clearance record (array) for auditability
-      const records = Object.values(updated);
-      localStorage.setItem(LOADER_CLEARANCES_KEY, JSON.stringify(records));
-    } catch {
-      // storage fallback
+  async function handleClearDeparture(tripId: string, clearance: ClearanceRecord) {
+    const recordId = plan.trips.find((trip) => trip.id === tripId)?.recordId;
+    if (!recordId) {
+      setFailure("The published trip could not be found.");
+      return;
     }
-    // Notify Dispatch desk via workspace chat
-    const chatMsg = {
-      id: crypto.randomUUID(),
-      contactId: "dispatch-desk",
-      text: `[DEPARTURE CLEARED] Trip ${tripId} | Vehicle ${clearance.vehicleId} | ${clearance.totalStops} stops | Payload: ${clearance.finalKg} kg / ${clearance.finalM3} m³ | Exceptions: ${clearance.exceptionsCount} | Cleared by: ${clearance.clearedBy} at ${clearance.clearedAt}`,
-      outgoing: true,
-      at: new Date().toISOString(),
-    };
-    saveWorkspace(
-      { ...workspace, messages: [...workspace.messages, chatMsg] },
-      `Trip ${tripId} cleared for departure. Manifest transmitted to driver client.`
-    );
-    setView("overview");
+    try {
+      await loaderApi.verifyManifest(recordId);
+      await loaderApi.clearDeparture(recordId);
+      await reloadLoader();
+      setFailure("");
+      setMessage(`Trip ${tripId} is cleared. The driver was notified to complete readiness.`);
+      setView("overview");
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Departure clearance could not be issued.");
+    }
   }
 
   function handleVerificationChange(tripId: string, next: ManifestVerification) {
-    const updated = { ...verifications, [tripId]: next };
-    setVerifications(updated);
-    try {
-      localStorage.setItem(LOADER_VERIFICATIONS_KEY, JSON.stringify(updated));
-    } catch {
-      setFailure("Loading verification progress could not be saved.");
-    }
+    setVerifications((current) => ({ ...current, [tripId]: next }));
   }
 
   function signOut() {
@@ -239,7 +241,7 @@ export function LoaderDashboard() {
       authService.signOut();
       router.replace("/login");
     } catch {
-      setFailure("Could not sign out. Please check local storage.");
+      setFailure("Could not sign out.");
     }
   }
 
@@ -275,7 +277,7 @@ export function LoaderDashboard() {
               title={navCollapsed ? label : undefined}
               aria-current={
                 (id === "overview" && (view === "overview" || view === "manifest")) ||
-                view === id
+                  view === id
                   ? "page"
                   : undefined
               }
@@ -302,7 +304,7 @@ export function LoaderDashboard() {
           <span className="user-avatar">LD</span>
           <div>
             <strong>{session.name}</strong>
-            <span>Loader · Demo</span>
+            <span>Loader · {session.location}</span>
           </div>
           <button aria-label="Sign out" onClick={signOut}>
             <LogOut size={18} aria-hidden="true" />
@@ -330,7 +332,8 @@ export function LoaderDashboard() {
           </div>
 
           <div>
-            <span className="demo-label">Demo data</span>
+            <span className="demo-label">Live operations</span>
+            <SharedAccountTools session={session} />
             <WorkspaceTools
               state={workspace}
               plan={plan}

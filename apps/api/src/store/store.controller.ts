@@ -12,7 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Inject } from '@nestjs/common';
 import { StoreService } from './store.service';
-import { CreateDiscrepancyClaimDto, StoreDeliveryFilterDto } from './dto/store.dto';
+import { ConfirmReceiptDto, CreateDiscrepancyClaimDto, StoreDeliveryFilterDto } from './dto/store.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -76,6 +76,17 @@ export class StoreController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.storeService.createDiscrepancyClaim(dto, user);
+  }
+
+  @Post('receipts')
+  @Roles('store_manager', 'admin')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Confirm correct physical receipt after proof of delivery' })
+  async confirmReceipt(
+    @Body() dto: ConfirmReceiptDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.storeService.confirmReceipt(dto, user);
   }
 
   @Get('discrepancies')

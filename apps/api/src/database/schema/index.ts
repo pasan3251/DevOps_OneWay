@@ -14,6 +14,10 @@ export * from './discrepancies';
 export * from './audit';
 export * from './matrix';
 export * from './mutations';
+export * from './plans';
+export * from './loading';
+export * from './communications';
+export * from './receiving';
 
 import { depots } from './depots';
 import { outlets } from './outlets';
@@ -25,6 +29,8 @@ import { orders, orderItems } from './orders';
 import { trips, tripStops } from './trips';
 import { proofOfDeliveries } from './proofs';
 import { discrepancyClaims } from './discrepancies';
+import { storeReceipts } from './receiving';
+import { deliveryPlans, planVersions } from './plans';
 
 export const depotsRelations = relations(depots, ({ many }) => ({
   outlets: many(outlets),
@@ -97,6 +103,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     references: [tripStops.orderId],
   }),
   discrepancies: many(discrepancyClaims),
+  receipts: many(storeReceipts),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
@@ -111,6 +118,10 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 }));
 
 export const tripsRelations = relations(trips, ({ one, many }) => ({
+  planVersion: one(planVersions, {
+    fields: [trips.planVersionId],
+    references: [planVersions.id],
+  }),
   depot: one(depots, {
     fields: [trips.depotId],
     references: [depots.id],
@@ -130,6 +141,16 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
   stops: many(tripStops),
 }));
 
+export const deliveryPlansRelations = relations(deliveryPlans, ({ one, many }) => ({
+  depot: one(depots, { fields: [deliveryPlans.depotId], references: [depots.id] }),
+  versions: many(planVersions),
+}));
+
+export const planVersionsRelations = relations(planVersions, ({ one, many }) => ({
+  plan: one(deliveryPlans, { fields: [planVersions.planId], references: [deliveryPlans.id] }),
+  trips: many(trips),
+}));
+
 export const tripStopsRelations = relations(tripStops, ({ one }) => ({
   trip: one(trips, {
     fields: [tripStops.tripId],
@@ -146,6 +167,25 @@ export const tripStopsRelations = relations(tripStops, ({ one }) => ({
   proofOfDelivery: one(proofOfDeliveries, {
     fields: [tripStops.id],
     references: [proofOfDeliveries.tripStopId],
+  }),
+  receipt: one(storeReceipts, {
+    fields: [tripStops.id],
+    references: [storeReceipts.tripStopId],
+  }),
+}));
+
+export const storeReceiptsRelations = relations(storeReceipts, ({ one }) => ({
+  order: one(orders, {
+    fields: [storeReceipts.orderId],
+    references: [orders.id],
+  }),
+  tripStop: one(tripStops, {
+    fields: [storeReceipts.tripStopId],
+    references: [tripStops.id],
+  }),
+  confirmedByUser: one(users, {
+    fields: [storeReceipts.confirmedBy],
+    references: [users.id],
   }),
 }));
 

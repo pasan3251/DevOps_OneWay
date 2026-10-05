@@ -136,7 +136,7 @@ export function PreTripModal({
                 <div className="text-xs">
                   <span className="font-bold block text-foreground flex items-center gap-1.5">
                     <Thermometer size={14} className="text-primary" />
-                    Reefer Cooling Sensor: {vehicle.reeferTemperatureC.toFixed(1)}°C (Target: 2°C - 4°C)
+                    Reefer Cooling Sensor: {vehicle.reeferTemperatureC === null ? "Confirm physical gauge" : `${vehicle.reeferTemperatureC.toFixed(1)}°C`} (Target: 2°C - 4°C)
                   </span>
                   <span className="text-muted-foreground text-[11px]">
                     Refrigeration unit operating within chilled bounds.

@@ -137,6 +137,9 @@ describe('Store Manager Domain & Operational Integration', () => {
       discrepancyClaims: {
         findMany: async () => [],
       },
+      storeReceipts: {
+        findFirst: async () => null,
+      },
     },
     insert: () => ({
       values: (val: any) => ({
@@ -155,6 +158,12 @@ describe('Store Manager Domain & Operational Integration', () => {
         ],
       }),
     }),
+    update: () => ({
+      set: () => ({
+        where: async () => [],
+      }),
+    }),
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(mockDb),
   };
 
   beforeAll(async () => {

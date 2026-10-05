@@ -27,10 +27,10 @@ export class MasterDataService {
     });
   }
 
-  async getVehicles(depotId?: string, status?: string) {
+  async getVehicles(depotId?: string, status?: 'available' | 'in_transit' | 'maintenance' | 'offline') {
     const conditions = [eq(schema.vehicles.isActive, true)];
     if (depotId) conditions.push(eq(schema.vehicles.depotId, depotId));
-    if (status) conditions.push(eq(schema.vehicles.status, status as any));
+    if (status) conditions.push(eq(schema.vehicles.status, status));
 
     return this.db.query.vehicles.findMany({
       where: and(...conditions),
@@ -40,18 +40,30 @@ export class MasterDataService {
     });
   }
 
-  async getDrivers(depotId?: string, status?: string) {
+  async getDrivers(depotId?: string, status?: 'available' | 'on_trip' | 'off_duty') {
     const conditions = [eq(schema.drivers.isActive, true)];
     if (depotId) conditions.push(eq(schema.drivers.depotId, depotId));
-    if (status) conditions.push(eq(schema.drivers.status, status as any));
+    if (status) conditions.push(eq(schema.drivers.status, status));
 
-    return this.db.query.drivers.findMany({
+    const drivers = await this.db.query.drivers.findMany({
       where: and(...conditions),
       with: {
         user: true,
         depot: true,
       },
     });
+    return drivers.map((driver) => ({
+      ...driver,
+      user: driver.user ? {
+        id: driver.user.id,
+        firstName: driver.user.firstName,
+        lastName: driver.user.lastName,
+        role: driver.user.role,
+        phone: driver.user.phone,
+        depotId: driver.user.depotId,
+        isActive: driver.user.isActive,
+      } : null,
+    }));
   }
 
   async getProducts(brand?: 'Fresh' | 'Style' | 'Tech', tempRequirement?: 'ambient' | 'chilled') {

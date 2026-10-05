@@ -123,9 +123,9 @@ export interface DriverVehicleTelematics {
   fuelQuotaLiters: number;
   kmPerLiter: number;
   reeferActive: boolean;
-  reeferTemperatureC: number;
+  reeferTemperatureC: number | null;
   targetReeferRange: [number, number]; // e.g. [2, 4]
-  odometerKm: number;
+  odometerKm?: number;
   engineStatus: "running" | "idle" | "stopped";
 }
 
@@ -151,7 +151,7 @@ export interface DriverRouteData {
   shiftStatus: ShiftStatus;
   stops: StopItem[];
   routeDistanceKm: number;
-  returnDistanceKm: number;
+  returnDistanceKm: number | null;
   loaderClearance: {
     cleared: boolean;
     clearedAt?: string;

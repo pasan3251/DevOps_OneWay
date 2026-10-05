@@ -18,6 +18,8 @@ export const outlets = pgTable('outlets', {
   mallWindowStart: varchar('mall_window_start', { length: 5 }),
   mallWindowEnd: varchar('mall_window_end', { length: 5 }),
   parkingConstraint: varchar('parking_constraint', { length: 32 }).notNull().default('normal'),
+  dockType: varchar('dock_type', { length: 32 }).notNull().default('standard'),
+  serviceTimeMinutes: numeric('service_time_minutes', { precision: 6, scale: 2 }).notNull().default('20.00'),
   isVanOnly: boolean('is_van_only').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

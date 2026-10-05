@@ -5,16 +5,23 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { DRIZZLE_ORM, DrizzleDb } from '../database/database.module';
 import * as schema from '../database/schema';
 import { CreateOrderDto, OrderFilterDto } from './dto/order.dto';
 import { RequestUser } from '../common/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../communications/notifications.service';
 
 @Injectable()
 export class OrdersService {
-  constructor(@Inject(DRIZZLE_ORM) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DRIZZLE_ORM) private readonly db: DrizzleDb,
+    @Optional() private readonly auditService?: AuditService,
+    @Optional() private readonly notificationsService?: NotificationsService,
+  ) {}
 
   private getColomboOrderCycle() {
     const now = new Date();
@@ -34,7 +41,7 @@ export class OrdersService {
     };
   }
 
-  async createOrder(dto: CreateOrderDto, userId?: string) {
+  async createOrder(dto: CreateOrderDto, userId?: string, actorRole?: string) {
     if (!dto.items || dto.items.length === 0) {
       throw new BadRequestException('Order must contain at least one line item');
     }
@@ -136,7 +143,7 @@ export class OrdersService {
     const orderNumber = `ORD-${dto.orderDate}-${dto.brand.substring(0, 2).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // 6. Execute Atomic Transaction
-    return await this.db.transaction(async (tx) => {
+    const created = await this.db.transaction(async (tx) => {
       const [newOrder] = await tx
         .insert(schema.orders)
         .values({
@@ -170,6 +177,30 @@ export class OrdersService {
         items: insertedItems,
       };
     });
+    await this.auditService?.record({
+      actorId: userId,
+      actorRole,
+      action: 'order.created',
+      entity: 'order',
+      entityId: created.id,
+      afterState: { status: created.status, orderNumber: created.orderNumber },
+    });
+    if (this.notificationsService) {
+      const recipients = await this.notificationsService.usersForRoles(
+        ['dispatcher', 'admin'],
+        { depotId: outlet.depotId },
+      );
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'ORDER_CREATED',
+        title: 'New order ready for planning',
+        message: `${created.orderNumber} was submitted by ${outlet.name}.`,
+        entityType: 'order',
+        entityId: created.id,
+        payload: { status: created.status, outletId: outlet.id },
+      });
+    }
+    return created;
   }
 
   async listOrders(filter: OrderFilterDto) {
@@ -254,6 +285,19 @@ export class OrdersService {
       throw new ForbiddenException('Store Managers can only view orders for their assigned outlet');
     }
 
+    if (user?.role === 'loader' && (!user.depotId || order.outlet.depotId !== user.depotId)) {
+      throw new ForbiddenException('Loaders can only view orders assigned to their depot');
+    }
+
+    if (user?.role === 'driver') {
+      const driver = await this.db.query.drivers.findFirst({
+        where: eq(schema.drivers.userId, user.id),
+      });
+      if (!driver || order.tripStop?.trip?.driverId !== driver.id) {
+        throw new ForbiddenException('Drivers can only view orders on their assigned trip');
+      }
+    }
+
     return order;
   }
 
@@ -291,6 +335,16 @@ export class OrdersService {
       })
       .where(eq(schema.orders.id, orderId))
       .returning();
+
+    await this.auditService?.record({
+      actorId: user?.id,
+      actorRole: user?.role,
+      action: 'order.cancelled',
+      entity: 'order',
+      entityId: orderId,
+      beforeState: { status: order.status },
+      afterState: { status: updatedOrder.status },
+    });
 
     return updatedOrder;
   }

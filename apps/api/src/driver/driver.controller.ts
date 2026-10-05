@@ -17,6 +17,7 @@ import {
   UpdateTelematicsDto,
   ConfirmDriverReadinessDto,
   ConfirmDepotReturnDto,
+  ReportDelayDto,
 } from './dto/driver.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -30,10 +31,17 @@ export class DriverController {
   constructor(private readonly driverService: DriverService) {}
 
   @Get('active-trip')
-  @Roles('driver', 'admin', 'dispatcher')
+  @Roles('driver', 'admin')
   @ApiOperation({ summary: 'Get current assigned active trip and ordered stops for logged in driver' })
   async getActiveTrip(@CurrentUser('id') userId: string) {
     return this.driverService.getActiveTrip(userId);
+  }
+
+  @Get('trips/history')
+  @Roles('driver', 'admin')
+  @ApiOperation({ summary: 'Get completed trip history for the logged in driver' })
+  getTripHistory(@CurrentUser('id') userId: string) {
+    return this.driverService.getTripHistory(userId);
   }
 
   @Post('trips/:id/readiness')
@@ -93,6 +101,18 @@ export class DriverController {
     @CurrentUser('id') userId: string,
   ) {
     return this.driverService.failStop(stopId, dto, userId);
+  }
+
+  @Post('stops/:stopId/delay')
+  @Roles('driver', 'admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Persist a driver-reported route delay and notify affected roles' })
+  async reportDelay(
+    @Param('stopId') stopId: string,
+    @Body() dto: ReportDelayDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.driverService.reportDelay(stopId, dto, userId);
   }
 
   @Post('trips/:id/complete')

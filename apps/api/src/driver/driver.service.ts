@@ -5,8 +5,9 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE_ORM, DrizzleDb } from '../database/database.module';
 import * as schema from '../database/schema';
 import {
@@ -16,7 +17,10 @@ import {
   UpdateTelematicsDto,
   ConfirmDriverReadinessDto,
   ConfirmDepotReturnDto,
+  ReportDelayDto,
 } from './dto/driver.dto';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../communications/notifications.service';
 
 const TERMINAL_STOP_STATUSES = new Set([
   'DELIVERED',
@@ -26,7 +30,11 @@ const TERMINAL_STOP_STATUSES = new Set([
 
 @Injectable()
 export class DriverService {
-  constructor(@Inject(DRIZZLE_ORM) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DRIZZLE_ORM) private readonly db: DrizzleDb,
+    @Optional() private readonly auditService?: AuditService,
+    @Optional() private readonly notificationsService?: NotificationsService,
+  ) {}
 
   private async getDriverProfile(userId: string) {
     const driver = await this.db.query.drivers.findFirst({
@@ -115,7 +123,7 @@ export class DriverService {
     const trip = await this.db.query.trips.findFirst({
       where: and(
         eq(schema.trips.driverId, driver.id),
-        inArray(schema.trips.status, ['MANIFEST_ISSUED', 'EN_ROUTE', 'RETURNING']),
+        inArray(schema.trips.status, ['CLEARED', 'DRIVER_READY', 'EN_ROUTE', 'RETURNING']),
       ),
       orderBy: [asc(schema.trips.operatingDate), asc(schema.trips.tripSequenceInDay)],
       with: {
@@ -139,16 +147,41 @@ export class DriverService {
     return {
       ...trip,
       departureUnlocked:
-        trip.status === 'MANIFEST_ISSUED' &&
+        (trip.status === 'CLEARED' || trip.status === 'DRIVER_READY') &&
         Boolean(trip.gateClearedAt) &&
         Boolean(trip.driverReadyAt),
     };
+  }
+
+  async getTripHistory(userId: string) {
+    const driver = await this.getDriverProfile(userId);
+    return this.db.query.trips.findMany({
+      where: and(
+        eq(schema.trips.driverId, driver.id),
+        eq(schema.trips.status, 'COMPLETED'),
+      ),
+      orderBy: [desc(schema.trips.operatingDate), desc(schema.trips.actualReturnTime)],
+      limit: 30,
+      with: {
+        vehicle: true,
+        depot: true,
+        stops: {
+          orderBy: [asc(schema.tripStops.stopSequence)],
+          with: {
+            outlet: true,
+            order: { with: { items: { with: { product: true } } } },
+            proofOfDelivery: true,
+          },
+        },
+      },
+    });
   }
 
   async confirmReadiness(
     tripId: string,
     dto: ConfirmDriverReadinessDto,
     userId: string,
+    occurredAt?: Date,
   ) {
     const driver = await this.getDriverProfile(userId);
     const trip = await this.db.query.trips.findFirst({
@@ -158,21 +191,42 @@ export class DriverService {
     if (trip.driverId !== driver.id) {
       throw new ForbiddenException('Cannot acknowledge a trip assigned to another driver');
     }
-    if (trip.status !== 'MANIFEST_ISSUED' || !trip.gateClearedAt || !trip.gatePassToken) {
+    if (trip.status !== 'CLEARED' || !trip.gateClearedAt || !trip.gatePassToken) {
       throw new ConflictException('Loader clearance must be issued before driver readiness');
     }
     if (Object.values(dto).some((value) => value !== true)) {
       throw new BadRequestException('Every readiness item must be confirmed before departure');
     }
+    const now = occurredAt ?? new Date();
     const [updated] = await this.db
       .update(schema.trips)
-      .set({ driverReadyAt: new Date(), driverChecklist: dto, updatedAt: new Date() })
+      .set({ status: 'DRIVER_READY', driverReadyAt: now, driverChecklist: dto, updatedAt: now })
       .where(eq(schema.trips.id, tripId))
       .returning();
+    await this.auditService?.record({
+      actorId: userId,
+      actorRole: 'driver',
+      action: 'driver.ready',
+      entity: 'trip',
+      entityId: tripId,
+      beforeState: { status: trip.status },
+      afterState: { status: updated.status, driverReadyAt: updated.driverReadyAt },
+    });
+    if (this.notificationsService) {
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'loader'], { depotId: trip.depotId });
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'DRIVER_READY',
+        title: 'Driver readiness confirmed',
+        message: `Trip ${trip.tripNumber} is ready to depart.`,
+        entityType: 'trip',
+        entityId: trip.id,
+      });
+    }
     return updated;
   }
 
-  async departTrip(tripId: string, userId: string) {
+  async departTrip(tripId: string, userId: string, occurredAt?: Date) {
     const driver = await this.getDriverProfile(userId);
     const trip = await this.db.query.trips.findFirst({
       where: eq(schema.trips.id, tripId),
@@ -182,15 +236,18 @@ export class DriverService {
     if (trip.driverId !== driver.id) {
       throw new ForbiddenException('You are not authorized to depart a trip assigned to another driver');
     }
-    if (trip.status !== 'MANIFEST_ISSUED' || !trip.gateClearedAt) {
+    if (!trip.gateClearedAt || !trip.gatePassToken) {
       throw new ConflictException('The loader has not released this manifest for departure');
     }
-    if (!trip.driverReadyAt) {
+    if (trip.status === 'CLEARED' || !trip.driverReadyAt) {
       throw new ConflictException('Complete the driver readiness check before departure');
     }
-    const now = new Date();
+    if (trip.status !== 'DRIVER_READY') {
+      throw new ConflictException(`Trip cannot depart from status '${trip.status}'`);
+    }
+    const now = occurredAt ?? new Date();
     const orderIds = trip.stops.map((stop) => stop.orderId);
-    return this.db.transaction(async (tx) => {
+    const updated = await this.db.transaction(async (tx) => {
       const [updatedTrip] = await tx
         .update(schema.trips)
         .set({ status: 'EN_ROUTE', actualDepartureTime: now, updatedAt: now })
@@ -203,6 +260,31 @@ export class DriverService {
       }
       return updatedTrip;
     });
+    await this.auditService?.record({
+      actorId: userId,
+      actorRole: 'driver',
+      action: 'trip.departed',
+      entity: 'trip',
+      entityId: tripId,
+      beforeState: { status: trip.status },
+      afterState: { status: 'EN_ROUTE', actualDepartureTime: now },
+    });
+    if (this.notificationsService) {
+      const outletIds = trip.stops.map((stop) => stop.outletId);
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'store_manager'], {
+        depotId: trip.depotId,
+        outletIds,
+      });
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'TRIP_DEPARTED',
+        title: 'Trip departed',
+        message: `${trip.tripNumber} has left the depot.`,
+        entityType: 'trip',
+        entityId: trip.id,
+      });
+    }
+    return updated;
   }
 
   async arriveAtStop(stopId: string, dto: ArriveAtStopDto, userId: string) {
@@ -223,7 +305,7 @@ export class DriverService {
       throw new ConflictException(`Stop cannot arrive from status '${stop.status}'`);
     }
 
-    const now = new Date();
+    const now = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
     const { opensAt, closesAt } = this.effectiveWindow(stop.outlet, now);
     const waitTimeMinutes = Math.max(
       0,
@@ -255,6 +337,29 @@ export class DriverService {
         updatedAt: now,
       }).where(eq(schema.drivers.id, driver.id));
     }
+    await this.auditService?.record({
+      actorId: userId,
+      actorRole: 'driver',
+      action: 'trip.arrived',
+      entity: 'trip_stop',
+      entityId: stopId,
+      beforeState: { status: stop.status },
+      afterState: { status: updatedStop.status, actualArrivalTime: now },
+    });
+    if (slaBreachMinutes > 0 && this.notificationsService) {
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'store_manager'], {
+        depotId: stop.trip.depotId,
+        outletIds: [stop.outletId],
+      });
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'LATE_RISK',
+        title: 'Delivery window breached',
+        message: `Arrival is ${slaBreachMinutes} minutes beyond the receiving window.`,
+        entityType: 'trip_stop',
+        entityId: stopId,
+      });
+    }
     return { ...updatedStop, effectiveWindow: { opensAt, closesAt } };
   }
 
@@ -279,8 +384,8 @@ export class DriverService {
     if (!['ARRIVED', 'WAITING_WINDOW', 'UNLOADING'].includes(stop.status)) {
       throw new ConflictException(`Proof of delivery is not allowed from status '${stop.status}'`);
     }
-    const now = new Date();
-    if (stop.windowHoldUntil && now < stop.windowHoldUntil) {
+    const eventAt = dto.clientCapturedAt ? new Date(dto.clientCapturedAt) : new Date();
+    if (stop.windowHoldUntil && eventAt < stop.windowHoldUntil) {
       throw new ConflictException(`Unloading is locked until ${stop.windowHoldUntil.toISOString()}`);
     }
     if (dto.expectedCartons !== stop.order.totalItemsCount) {
@@ -299,7 +404,7 @@ export class DriverService {
       throw new BadRequestException('A signature or photo is required as proof of handover');
     }
 
-    return this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       const [pod] = await tx.insert(schema.proofOfDeliveries).values({
         tripStopId: stop.id,
         orderId: stop.orderId,
@@ -313,16 +418,16 @@ export class DriverService {
         driverNotes: dto.driverNotes,
         geoLatitude: dto.geoLatitude.toFixed(7),
         geoLongitude: dto.geoLongitude.toFixed(7),
-        capturedAt: dto.clientCapturedAt ? new Date(dto.clientCapturedAt) : now,
+        capturedAt: eventAt,
       }).returning();
 
       const terminalStatus = dto.outcome === 'FULL' ? 'DELIVERED' : 'DISCREPANCY_FLAGGED';
       const [updatedStop] = await tx.update(schema.tripStops).set({
         status: terminalStatus,
-        actualDepartureTime: now,
-        updatedAt: now,
+        actualDepartureTime: eventAt,
+        updatedAt: eventAt,
       }).where(eq(schema.tripStops.id, stopId)).returning();
-      await tx.update(schema.orders).set({ status: 'DELIVERED', updatedAt: now }).where(eq(schema.orders.id, stop.orderId));
+      await tx.update(schema.orders).set({ status: 'DELIVERED', updatedAt: eventAt }).where(eq(schema.orders.id, stop.orderId));
 
       if (dto.outcome === 'PARTIAL') {
         await tx.insert(schema.discrepancyClaims).values({
@@ -346,12 +451,37 @@ export class DriverService {
       if (allResolved) {
         await tx.update(schema.trips).set({
           status: 'RETURNING',
-          returnStartedAt: now,
-          updatedAt: now,
+          returnStartedAt: eventAt,
+          updatedAt: eventAt,
         }).where(eq(schema.trips.id, stop.tripId));
       }
       return { stop: updatedStop, proofOfDelivery: pod, tripStatus: allResolved ? 'RETURNING' : 'EN_ROUTE' };
     });
+    await this.auditService?.record({
+      actorId: userId,
+      actorRole: 'driver',
+      action: 'delivery.completed',
+      entity: 'trip_stop',
+      entityId: stopId,
+      beforeState: { status: stop.status },
+      afterState: { status: result.stop.status, outcome: dto.outcome, capturedAt: eventAt },
+    });
+    if (this.notificationsService) {
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'store_manager'], {
+        depotId: stop.trip.depotId,
+        outletIds: [stop.outletId],
+      });
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'DELIVERY_COMPLETED',
+        title: dto.outcome === 'FULL' ? 'Delivery completed' : 'Partial delivery recorded',
+        message: `Proof of delivery was captured for order ${stop.order.orderNumber}.`,
+        entityType: 'trip_stop',
+        entityId: stopId,
+        payload: { orderId: stop.orderId, outcome: dto.outcome },
+      });
+    }
+    return result;
   }
 
   async failStop(stopId: string, dto: FailStopDto, userId: string) {
@@ -371,16 +501,19 @@ export class DriverService {
     if (!['PENDING', 'ARRIVED', 'WAITING_WINDOW', 'UNLOADING'].includes(stop.status)) {
       throw new ConflictException(`Delivery exception is not allowed from status '${stop.status}'`);
     }
-    const now = new Date();
-    return this.db.transaction(async (tx) => {
+    const now = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
+    const result = await this.db.transaction(async (tx) => {
       const [updatedStop] = await tx.update(schema.tripStops).set({
         status: 'FAILED',
         failureReason: dto.failureReason,
+        failureNotes: dto.driverNotes ?? null,
+        failurePhotoUrl: dto.photoEvidenceUrl ?? null,
+        affectedCartons: dto.affectedCartons ?? 0,
         actualDepartureTime: now,
         updatedAt: now,
       }).where(eq(schema.tripStops.id, stopId)).returning();
       await tx.update(schema.orders).set({
-        status: 'DEFICIT_PENDING',
+        status: 'FAILED',
         deferralReason: dto.failureReason,
         updatedAt: now,
       }).where(eq(schema.orders.id, stop.orderId));
@@ -395,12 +528,76 @@ export class DriverService {
       }
       return { stop: updatedStop, tripStatus: allResolved ? 'RETURNING' : 'EN_ROUTE' };
     });
+    await this.auditService?.record({
+      actorId: userId,
+      actorRole: 'driver',
+      action: 'delivery.exception',
+      entity: 'trip_stop',
+      entityId: stopId,
+      beforeState: { status: stop.status },
+      afterState: { status: 'FAILED', reason: dto.failureReason, affectedCartons: dto.affectedCartons ?? 0 },
+    });
+    if (this.notificationsService) {
+      const stopWithOutlet = await this.db.query.tripStops.findFirst({
+        where: eq(schema.tripStops.id, stopId),
+      });
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'store_manager'], {
+        depotId: stop.trip.depotId,
+        outletIds: stopWithOutlet ? [stopWithOutlet.outletId] : [],
+      });
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'DELIVERY_EXCEPTION',
+        title: 'Delivery exception recorded',
+        message: dto.driverNotes || dto.failureReason,
+        entityType: 'trip_stop',
+        entityId: stopId,
+        payload: { reason: dto.failureReason, photoEvidenceUrl: dto.photoEvidenceUrl },
+      });
+    }
+    return result;
+  }
+
+  async reportDelay(stopId: string, dto: ReportDelayDto, userId: string) {
+    const driver = await this.getDriverProfile(userId);
+    const stop = await this.db.query.tripStops.findFirst({
+      where: eq(schema.tripStops.id, stopId),
+      with: { trip: true },
+    });
+    if (!stop) throw new NotFoundException('Trip stop not found');
+    if (stop.trip.driverId !== driver.id) throw new ForbiddenException('Cannot update another driver’s route');
+    if (stop.trip.status !== 'EN_ROUTE' || TERMINAL_STOP_STATUSES.has(stop.status)) {
+      throw new ConflictException('Delay can only be reported for an active delivery stop');
+    }
+    const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
+    const [updated] = await this.db.update(schema.tripStops).set({
+      reportedDelayMinutes: dto.delayMinutes,
+      delayReason: dto.reason,
+      lastDelayReportedAt: occurredAt,
+      updatedAt: occurredAt,
+    }).where(eq(schema.tripStops.id, stopId)).returning();
+    if (this.notificationsService) {
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'store_manager'], {
+        depotId: stop.trip.depotId,
+        outletIds: [stop.outletId],
+      });
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'LATE_RISK',
+        title: 'Driver reported a delay',
+        message: `${dto.delayMinutes} minute delay: ${dto.reason}`,
+        entityType: 'trip_stop',
+        entityId: stopId,
+      });
+    }
+    return updated;
   }
 
   async completeTrip(
     tripId: string,
     dto: ConfirmDepotReturnDto,
     userId: string,
+    occurredAt?: Date,
   ) {
     const driver = await this.getDriverProfile(userId);
     const trip = await this.db.query.trips.findFirst({
@@ -425,17 +622,31 @@ export class DriverService {
     if (depotDistance > 2) {
       throw new ConflictException('Depot return can be confirmed only within the depot geofence');
     }
-    const now = new Date();
-    return this.db.transaction(async (tx) => {
+    const now = occurredAt ?? new Date();
+    const result = await this.db.transaction(async (tx) => {
       const [updatedTrip] = await tx.update(schema.trips).set({
         status: 'COMPLETED',
         actualReturnTime: now,
         updatedAt: now,
       }).where(eq(schema.trips.id, tripId)).returning();
-      await tx.update(schema.vehicles).set({ status: 'available', updatedAt: now }).where(eq(schema.vehicles.id, trip.vehicleId));
+      await tx.update(schema.vehicles).set({
+        status: 'available',
+        weekToDateFuelUsedL: sql`${schema.vehicles.weekToDateFuelUsedL} + ${Number(trip.plannedFuelLitres)}`,
+        updatedAt: now,
+      }).where(eq(schema.vehicles.id, trip.vehicleId));
       await tx.update(schema.drivers).set({ status: 'available', updatedAt: now }).where(eq(schema.drivers.id, driver.id));
       return updatedTrip;
     });
+    await this.auditService?.record({
+      actorId: userId,
+      actorRole: 'driver',
+      action: 'trip.completed',
+      entity: 'trip',
+      entityId: tripId,
+      beforeState: { status: trip.status },
+      afterState: { status: result.status, actualReturnTime: now },
+    });
+    return result;
   }
 
   async updateTelematics(dto: UpdateTelematicsDto, userId: string) {

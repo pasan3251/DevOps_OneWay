@@ -3,17 +3,25 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { DRIZZLE_ORM, DrizzleDb } from '../database/database.module';
 import * as schema from '../database/schema';
-import { CreateDiscrepancyClaimDto, StoreDeliveryFilterDto } from './dto/store.dto';
+import { ConfirmReceiptDto, CreateDiscrepancyClaimDto, StoreDeliveryFilterDto } from './dto/store.dto';
 import { RequestUser } from '../common/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../communications/notifications.service';
 
 @Injectable()
 export class StoreService {
-  constructor(@Inject(DRIZZLE_ORM) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DRIZZLE_ORM) private readonly db: DrizzleDb,
+    @Optional() private readonly auditService?: AuditService,
+    @Optional() private readonly notificationsService?: NotificationsService,
+  ) {}
 
   /**
    * Helper to compute Colombo Local Time (UTC + 05:30)
@@ -131,6 +139,7 @@ export class StoreService {
         },
         order: true,
         proofOfDelivery: true,
+        receipt: true,
       },
       orderBy: [desc(schema.tripStops.createdAt)],
       limit: 10,
@@ -176,6 +185,7 @@ export class StoreService {
         totalItemsCount: stop.order?.totalItemsCount || 0,
         totalWeightKg: stop.order?.totalWeightKg || '0.00',
         hasPod: Boolean(stop.proofOfDelivery),
+        receipt: stop.receipt,
         proofOfDelivery: stop.proofOfDelivery
           ? {
               id: stop.proofOfDelivery.id,
@@ -233,6 +243,7 @@ export class StoreService {
           },
         },
         proofOfDelivery: true,
+        receipt: true,
       },
       orderBy: [desc(schema.tripStops.createdAt)],
       limit: 50,
@@ -290,6 +301,7 @@ export class StoreService {
               capturedAt: stop.proofOfDelivery.capturedAt,
             }
           : null,
+        receipt: stop.receipt,
         discrepancies: (stop.order?.discrepancies || []).map((d) => ({
           id: d.id,
           claimNumber: d.claimNumber,
@@ -317,12 +329,13 @@ export class StoreService {
     if (!user.outletId) {
       throw new ForbiddenException('User is not assigned to an outlet to report discrepancies');
     }
+    const outletId = user.outletId;
 
     // 1. Verify Order belongs to this outlet
     const order = await this.db.query.orders.findFirst({
       where: and(
         eq(schema.orders.id, dto.orderId),
-        eq(schema.orders.outletId, user.outletId),
+        eq(schema.orders.outletId, outletId),
       ),
     });
 
@@ -333,7 +346,7 @@ export class StoreService {
     const orderStops = await this.db.query.tripStops.findMany({
       where: and(
         eq(schema.tripStops.orderId, order.id),
-        eq(schema.tripStops.outletId, user.outletId),
+        eq(schema.tripStops.outletId, outletId),
       ),
       with: { proofOfDelivery: true },
       orderBy: [desc(schema.tripStops.createdAt)],
@@ -353,10 +366,10 @@ export class StoreService {
         where: and(
           eq(schema.tripStops.id, dto.tripStopId),
           eq(schema.tripStops.orderId, order.id),
-          eq(schema.tripStops.outletId, user.outletId),
+          eq(schema.tripStops.outletId, outletId),
         ),
       });
-      if (!stop || stop.status !== 'DELIVERED') {
+      if (!stop || !['DELIVERED', 'DISCREPANCY_FLAGGED'].includes(stop.status)) {
         throw new BadRequestException('The selected delivery stop is not eligible for a receiving claim');
       }
     }
@@ -367,24 +380,118 @@ export class StoreService {
     const randSuffix = Math.floor(1000 + Math.random() * 9000);
     const claimNumber = `CLM-${dateCode}-${randSuffix}`;
 
-    // 3. Insert Claim Record
-    const [claim] = await this.db
-      .insert(schema.discrepancyClaims)
-      .values({
+    const deliveredStop = dto.tripStopId
+      ? orderStops.find((candidate) => candidate.id === dto.tripStopId)
+      : orderStops.find((candidate) => Boolean(candidate.proofOfDelivery));
+    if (!deliveredStop) {
+      throw new BadRequestException('A delivered trip stop is required for a receiving discrepancy');
+    }
+
+    const claim = await this.db.transaction(async (tx) => {
+      const [createdClaim] = await tx.insert(schema.discrepancyClaims).values({
         claimNumber,
         orderId: dto.orderId,
-        tripStopId: dto.tripStopId || null,
-        outletId: user.outletId,
+        tripStopId: deliveredStop.id,
+        outletId,
         reportedByRole: 'store_manager',
         reportedByUserId: user.id,
         status: 'LOGGED',
         discrepancyType: dto.discrepancyType,
         shortfallQty: dto.shortfallQty || 0,
         notes: dto.notes || null,
-      })
-      .returning();
-
+      }).returning();
+      const existingReceipt = await tx.query.storeReceipts.findFirst({
+        where: eq(schema.storeReceipts.tripStopId, deliveredStop.id),
+      });
+      if (!existingReceipt) {
+        await tx.insert(schema.storeReceipts).values({
+          orderId: order.id,
+          tripStopId: deliveredStop.id,
+          confirmedBy: user.id,
+          status: 'DISCREPANCY',
+          notes: dto.notes ?? null,
+        });
+      }
+      await tx.update(schema.orders).set({ status: 'DISPUTED', updatedAt: now }).where(eq(schema.orders.id, order.id));
+      return createdClaim;
+    });
+    await this.auditService?.record({
+      actorId: user.id,
+      actorRole: user.role,
+      action: 'receiving.discrepancy',
+      entity: 'discrepancy_claim',
+      entityId: claim.id,
+      afterState: claim,
+    });
+    if (this.notificationsService) {
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'admin']);
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'RECEIVING_DISCREPANCY',
+        title: 'Receiving discrepancy reported',
+        message: dto.notes || dto.discrepancyType,
+        entityType: 'discrepancy_claim',
+        entityId: claim.id,
+        payload: { orderId: order.id, outletId },
+      });
+    }
     return claim;
+  }
+
+  async confirmReceipt(dto: ConfirmReceiptDto, user: RequestUser) {
+    if (!user.outletId) throw new ForbiddenException('User is not assigned to an outlet');
+    const stop = await this.db.query.tripStops.findFirst({
+      where: and(
+        eq(schema.tripStops.id, dto.tripStopId),
+        eq(schema.tripStops.orderId, dto.orderId),
+        eq(schema.tripStops.outletId, user.outletId),
+      ),
+      with: { proofOfDelivery: true, receipt: true, order: true },
+    });
+    if (!stop?.proofOfDelivery || stop.status !== 'DELIVERED') {
+      throw new BadRequestException('Receipt can only be confirmed after a completed full delivery with POD');
+    }
+    if (stop.proofOfDelivery.outcome !== 'FULL') {
+      throw new BadRequestException('A partial delivery must be handled as a receiving discrepancy');
+    }
+    if (stop.receipt) {
+      if (stop.receipt.status === 'CONFIRMED') return stop.receipt;
+      throw new ConflictException('This delivery already has a receiving discrepancy');
+    }
+    const now = new Date();
+    const receipt = await this.db.transaction(async (tx) => {
+      const [created] = await tx.insert(schema.storeReceipts).values({
+        orderId: dto.orderId,
+        tripStopId: dto.tripStopId,
+        confirmedBy: user.id,
+        status: 'CONFIRMED',
+        notes: dto.notes ?? null,
+        confirmedAt: now,
+      }).returning();
+      await tx.update(schema.orders).set({ status: 'RECEIVED', updatedAt: now }).where(eq(schema.orders.id, dto.orderId));
+      return created;
+    });
+    await this.auditService?.record({
+      actorId: user.id,
+      actorRole: user.role,
+      action: 'receipt.confirmed',
+      entity: 'store_receipt',
+      entityId: receipt.id,
+      afterState: receipt,
+    });
+    if (this.notificationsService) {
+      const recipients = await this.notificationsService.usersForRoles(['dispatcher', 'admin']);
+      await this.notificationsService.create({
+        userIds: recipients,
+        type: 'RECEIPT_CONFIRMED',
+        title: 'Store receipt confirmed',
+        message: `Order ${stop.order.orderNumber} was received without discrepancy.`,
+        entityType: 'store_receipt',
+        entityId: receipt.id,
+        payload: { orderId: dto.orderId, outletId: user.outletId },
+      });
+    }
+    return receipt;
   }
 
   /**

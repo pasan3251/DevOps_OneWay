@@ -60,6 +60,9 @@ export const demoAccounts = [
 }>;
 
 export const DEMO_PASSWORD = "waypoint-demo";
+export const demoLoginEnabled =
+  process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN !== "false";
 
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && roles.includes(value as Role);

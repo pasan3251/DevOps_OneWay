@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dialog";
 import { WaypointLogo } from "@/components/waypoint-logo";
 import { authService } from "./auth-service";
-import { demoAccounts, DEMO_PASSWORD, type Role } from "./accounts";
+import { demoAccounts, demoLoginEnabled, DEMO_PASSWORD, type Role } from "./accounts";
 
 const signInSchema = z.object({
   identifier: z.string().trim().min(1, "Enter your email or employee ID."),
@@ -215,13 +215,13 @@ export function SignInPortal() {
                     <DialogHeader>
                       <DialogTitle>Password help</DialogTitle>
                       <DialogDescription>
-                        This is the frontend demo. Password reset will be
-                        available when account services are connected.
+                        Password reset is managed by your Waypoint account
+                        administrator.
                       </DialogDescription>
                     </DialogHeader>
                     <p>
-                      For now, choose a demo role below the sign-in form. It
-                      fills the details you need to explore that workspace.
+                      Contact your operations administrator to reset your
+                      password or restore a deactivated account.
                     </p>
                     <div className="help-note">
                       <Headset size={19} aria-hidden="true" />
@@ -321,7 +321,7 @@ export function SignInPortal() {
               )}
             </Button>
           </form>
-          <div className="demo-section">
+          {demoLoginEnabled && <div className="demo-section">
             <div className="section-divider">
               <span>Explore a demo</span>
             </div>
@@ -366,9 +366,9 @@ export function SignInPortal() {
             </span>
             <p className="demo-disclosure">
               <ShieldCheck size={15} aria-hidden="true" />
-              Demo access only. Account services are coming next.
+              Development accounts use the real Waypoint API and database.
             </p>
-          </div>
+          </div>}
         </div>
         <footer className="portal-footer">
           <span>Waypoint Group</span>

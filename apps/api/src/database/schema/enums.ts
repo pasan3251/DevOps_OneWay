@@ -54,8 +54,12 @@ export const orderStatusEnum = pgEnum('order_status', [
   'ORDER_RECORDED',
   'DISPATCH_PENDING',
   'ASSIGNED',
+  'LOADED',
   'IN_TRANSIT',
   'DELIVERED',
+  'FAILED',
+  'RECEIVED',
+  'DISPUTED',
   'DEFICIT_PENDING',
   'CANCELLED',
 ]);
@@ -65,6 +69,8 @@ export const tripStatusEnum = pgEnum('trip_status', [
   'LOCKED',
   'LOADING',
   'MANIFEST_ISSUED',
+  'CLEARED',
+  'DRIVER_READY',
   'EN_ROUTE',
   'RETURNING',
   'COMPLETED',
@@ -99,4 +105,48 @@ export const discrepancyTypeEnum = pgEnum('discrepancy_type', [
   'DAMAGE_IN_TRANSIT',
   'REJECTED_TEMPERATURE',
   'STORE_SHORTFALL',
+]);
+
+export const planStatusEnum = pgEnum('plan_status', [
+  'DRAFT',
+  'VALIDATED',
+  'PUBLISHED',
+  'SUPERSEDED',
+]);
+
+export const manifestStatusEnum = pgEnum('manifest_status', [
+  'PENDING',
+  'VERIFIED',
+  'EXCEPTION',
+  'RESOLVED',
+  'CLEARED',
+  'STALE',
+]);
+
+export const loadingExceptionTypeEnum = pgEnum('loading_exception_type', [
+  'SHORTFALL',
+  'DAMAGE',
+  'TEMPERATURE',
+  'OTHER',
+]);
+
+export const exceptionResolutionEnum = pgEnum('exception_resolution', ['OPEN', 'RESOLVED']);
+export const receiptStatusEnum = pgEnum('receipt_status', ['CONFIRMED', 'DISCREPANCY']);
+export const messageTypeEnum = pgEnum('message_type', ['TEXT', 'IMAGE', 'SYSTEM']);
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'ORDER_CREATED',
+  'PLAN_PUBLISHED',
+  'PLAN_REVISED',
+  'LOADING_EXCEPTION',
+  'LOADING_EXCEPTION_RESOLVED',
+  'DEPARTURE_CLEARED',
+  'DRIVER_READY',
+  'TRIP_DEPARTED',
+  'LATE_RISK',
+  'DELIVERY_COMPLETED',
+  'DELIVERY_EXCEPTION',
+  'ORDER_DEFERRED',
+  'RECEIPT_CONFIRMED',
+  'RECEIVING_DISCREPANCY',
+  'SYNC_CONFLICT',
 ]);

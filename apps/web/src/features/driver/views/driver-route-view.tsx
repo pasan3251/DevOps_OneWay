@@ -95,7 +95,7 @@ export function DriverRouteView({
         {route.vehicle.chilled && (
           <div>
             <span>Reefer</span>
-            <strong><Thermometer size={13} /> {route.vehicle.reeferTemperatureC.toFixed(1)}°C</strong>
+            <strong><Thermometer size={13} /> {route.vehicle.reeferTemperatureC === null ? "Gauge check" : `${route.vehicle.reeferTemperatureC.toFixed(1)}°C`}</strong>
           </div>
         )}
       </section>

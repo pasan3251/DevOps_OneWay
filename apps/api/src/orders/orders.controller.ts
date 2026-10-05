@@ -43,7 +43,7 @@ export class OrdersController {
       }
       dto.outletId = user.outletId;
     }
-    return this.ordersService.createOrder(dto, user.id);
+    return this.ordersService.createOrder(dto, user.id, user.role);
   }
 
   @Get()

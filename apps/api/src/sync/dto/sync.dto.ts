@@ -27,6 +27,7 @@ export class ClientMutationDto {
     'arrive_stop',
     'deliver_stop',
     'fail_stop',
+    'report_delay',
     'complete_trip',
   ])
   action!: string;
@@ -40,7 +41,33 @@ export class ClientMutationDto {
 
   @IsObject()
   @IsNotEmpty()
-  payload!: Record<string, any>;
+  payload!: {
+    tripId?: string;
+    stopId?: string;
+    vehicleRoadworthy?: boolean;
+    manifestAndSealMatched?: boolean;
+    fuelConfirmed?: boolean;
+    reeferTemperatureConfirmed?: boolean;
+    currentLatitude?: number;
+    currentLongitude?: number;
+    storeRepName?: string;
+    storeRepDesignation?: string;
+    outcome?: 'FULL' | 'PARTIAL';
+    expectedCartons?: number;
+    deliveredCartons?: number;
+    storeRepSignatureUrl?: string;
+    photoEvidenceUrl?: string;
+    driverNotes?: string;
+    geoLatitude?: number;
+    geoLongitude?: number;
+    clientCapturedAt?: string;
+    failureReason?: 'STORE_CLOSED_UNAVAILABLE' | 'DELIVERY_REJECTED' | 'DAMAGED_GOODS' | 'ACCESS_BLOCKED';
+    affectedCartons?: number;
+    delayMinutes?: number;
+    reason?: string;
+    latitude?: number;
+    longitude?: number;
+  };
 }
 
 export class BatchSyncDto {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -75,6 +75,7 @@ import "./operations.css";
 import { DeferralRecords, OutletDirectory } from "./workspace-records";
 import { WorkspaceCalendar } from "./workspace-calendar";
 import { WorkspaceChat } from "./workspace-chat";
+import { SharedAccountTools } from "@/features/shared/account-tools";
 import { WorkspaceTools } from "./workspace-tools";
 import { RouteMap } from "./route-map";
 import { RouteViews } from "./route-views";
@@ -143,6 +144,24 @@ export function DispatcherDashboard() {
   const [reason, setReason] = useState(deferralReasons[0]);
   const [note, setNote] = useState("");
   const [deferralError, setDeferralError] = useState("");
+  const [planningLoading, setPlanningLoading] = useState(false);
+
+  const reloadPlanning = useCallback(async () => {
+    setPlanningLoading(true);
+    try {
+      const loaded = await planningService.load(date);
+      setPlan(loaded);
+      setFailure("");
+      const firstTrip = loaded.trips.find((trip) => trip.depot === depot);
+      if (firstTrip) setTripId(firstTrip.id);
+      const firstVehicle = vehicles.find((vehicle) => vehicle.depot === depot && !vehicle.workshop);
+      if (firstVehicle) setNewVehicle(firstVehicle.id);
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Dispatch data could not be loaded.");
+    } finally {
+      setPlanningLoading(false);
+    }
+  }, [date, depot]);
 
   useEffect(() => {
     const active = authService.getSession();
@@ -180,13 +199,6 @@ export function DispatcherDashboard() {
       )
         setRouteMode(routeDestination as RouteMode);
       try {
-        setPlan(planningService.load());
-      } catch {
-        setFailure(
-          "Your saved demo plan couldn’t be read. Changes will replace it only when saved successfully.",
-        );
-      }
-      try {
         setWorkspace(workspaceService.load());
       } catch {
         setFailure(
@@ -205,22 +217,21 @@ export function DispatcherDashboard() {
   }, [router]);
 
   useEffect(() => {
+    if (session) void reloadPlanning();
+  }, [reloadPlanning, session]);
+
+  useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0 });
   }, [routeMode, view]);
 
-  const isDemoDate = date === DEMO_DATE;
-  const depotOrders = isDemoDate
-    ? orders.filter((order) => order.depot === depot)
-    : [];
-  const depotTrips = isDemoDate
-    ? plan.trips.filter((trip) => trip.depot === depot)
-    : [];
+  const depotOrders = orders.filter((order) => order.depot === depot);
+  const depotTrips = plan.trips.filter((trip) => trip.depot === depot);
   const activeTrip =
     depotTrips.find((trip) => trip.id === tripId) ?? depotTrips[0];
   const activeVehicle = activeTrip
     ? vehicles.find((vehicle) => vehicle.id === activeTrip.vehicleId)!
     : null;
-  const published = isDemoDate && plan.published.includes(depot);
+  const published = plan.published.includes(depot);
   const deferred = depotOrders.filter((order) =>
     plan.deferrals.some((entry) => entry.orderId === order.id),
   );
@@ -304,21 +315,6 @@ export function DispatcherDashboard() {
         0,
       );
   }
-  function save(next: Plan, feedback: string) {
-    try {
-      planningService.save(next);
-      setPlan(next);
-      setMessage(feedback);
-      setFailure("");
-      setAssignmentErrors([]);
-      return true;
-    } catch {
-      setFailure(
-        "Your browser couldn’t save this change. Your previous plan is intact. Allow site storage and retry.",
-      );
-      return false;
-    }
-  }
   function changeDepot(value: Depot) {
     setDepot(value);
     setSelected([]);
@@ -326,10 +322,8 @@ export function DispatcherDashboard() {
     setBrand("All brands");
     setAssignmentErrors([]);
     setMessage("");
-    setNewVehicle(
-      vehicles.find((vehicle) => vehicle.depot === value && !vehicle.workshop)!
-        .id,
-    );
+    const firstAvailable = vehicles.find((vehicle) => vehicle.depot === value && !vehicle.workshop);
+    if (firstAvailable) setNewVehicle(firstAvailable.id);
   }
   function toggleOrder(id: string) {
     setSelected((current) =>
@@ -339,72 +333,58 @@ export function DispatcherDashboard() {
     );
     setAssignmentErrors([]);
   }
-  function assign(orderIds?: string[]) {
+  async function assign(orderIds?: string[]) {
     const assignmentOrders = orderIds
       ? pending.filter((order) => orderIds.includes(order.id))
       : selectedOrders;
-    if (!activeTrip || !assignmentOrders.length || published) return;
-    const updated = {
-      ...activeTrip,
-      orderIds: [
-        ...activeTrip.orderIds,
-        ...assignmentOrders.map((order) => order.id),
-      ],
-    };
-    const next = {
-      ...plan,
-      trips: plan.trips.map((trip) =>
-        trip.id === updated.id ? updated : trip,
-      ),
-    };
-    const errors = validateTrip(updated, next);
-    if (errors.length) {
-      setAssignmentErrors(errors);
-      return;
-    }
-    if (
-      save(
-        next,
-        `${assignmentOrders.length} order${assignmentOrders.length === 1 ? "" : "s"} assigned to ${activeTrip.id}.`,
-      )
-    )
+    if (!assignmentOrders.length || published) return;
+    const vehicleId = activeTrip?.vehicleId ?? newVehicle;
+    const departure = activeTrip?.departure ?? assignmentOrders[0].window[0];
+    try {
+      await planningService.createTrip({ depot, operatingDate: date, vehicleId, orderIds: assignmentOrders.map((order) => order.id), departure });
+      await reloadPlanning();
       setSelected([]);
+      setMessage(`${assignmentOrders.length} order${assignmentOrders.length === 1 ? "" : "s"} allocated by the server.`);
+      setFailure("");
+    } catch (error) {
+      setAssignmentErrors([error instanceof Error ? error.message : "Allocation failed."]);
+    }
   }
-  function updateTrip(trip: Trip) {
-    if (!published)
-      save(
-        {
-          ...plan,
-          trips: plan.trips.map((item) => (item.id === trip.id ? trip : item)),
-        },
-        "Trip updated. Review its checks before publishing.",
-      );
+  async function updateTrip(trip: Trip) {
+    if (published) return;
+    try {
+      if (trip.orderIds.length) await planningService.updateTrip(trip, date);
+      else await planningService.removeTrip(trip);
+      await reloadPlanning();
+      setFailure("");
+      setMessage(trip.orderIds.length ? "Trip updated and route estimates recalculated." : "Empty trip removed and its orders returned to the backlog.");
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Trip update failed.");
+    }
   }
-  function createTrip(event: React.FormEvent) {
+  async function createTrip(event: React.FormEvent) {
     event.preventDefault();
     const [hour, minute] = newDeparture.split(":").map(Number);
-    const used = new Set(plan.trips.map((trip) => trip.id));
-    let number = 1;
-    while (used.has(`TRIP-${String(number).padStart(2, "0")}`)) number++;
-    const trip: Trip = {
-      id: `TRIP-${String(number).padStart(2, "0")}`,
-      depot,
-      vehicleId: newVehicle,
-      orderIds: [],
-      departure: hour * 60 + minute,
-    };
-    if (
-      save(
-        { ...plan, trips: [...plan.trips, trip] },
-        `${trip.id} created. Select orders to build its stop list.`,
-      )
-    ) {
-      setTripId(trip.id);
-      openRoute(trip.id);
+    if (!selectedOrders.length) {
+      setFailure("Select one or more compatible orders before creating a trip.");
+      return;
+    }
+    try {
+      await planningService.createTrip({
+        depot,
+        operatingDate: date,
+        vehicleId: newVehicle,
+        orderIds: selectedOrders.map((order) => order.id),
+        departure: hour * 60 + minute,
+      });
+      await reloadPlanning();
+      setMessage("Trip created and persisted.");
       setModal(null);
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Trip creation failed.");
     }
   }
-  function defer(event: React.FormEvent) {
+  async function defer(event: React.FormEvent) {
     event.preventDefault();
     if (!note.trim()) {
       setDeferralError(
@@ -421,26 +401,16 @@ export function DispatcherDashboard() {
       );
       return;
     }
-    if (
-      save(
-        {
-          ...plan,
-          deferrals: [
-            ...plan.deferrals,
-            ...selectedOrders.map((order) => ({
-              orderId: order.id,
-              reason,
-              note: note.trim(),
-            })),
-          ],
-        },
-        `${selectedOrders.length} order${selectedOrders.length === 1 ? "" : "s"} deferred with a recorded reason.`,
-      )
-    ) {
+    try {
+      await Promise.all(selectedOrders.map((order) => planningService.defer(order.id, reason, note.trim())));
+      await reloadPlanning();
       setSelected([]);
       setModal(null);
       setNote("");
       setDeferralError("");
+      setMessage(`${selectedOrders.length} order${selectedOrders.length === 1 ? "" : "s"} deferred by the server.`);
+    } catch (error) {
+      setDeferralError(error instanceof Error ? error.message : "Deferral failed.");
     }
   }
   function signOut() {
@@ -458,7 +428,7 @@ export function DispatcherDashboard() {
     navigateView("routes");
     navigateRouteMode("assign");
   }
-  function createAssignedTrip(orderId: string, vehicleId: string) {
+  async function createAssignedTrip(orderId: string, vehicleId: string) {
     if (published) return;
     const order = pending.find((item) => item.id === orderId);
     const vehicle = vehicles.find(
@@ -470,10 +440,20 @@ export function DispatcherDashboard() {
       setAssignmentErrors(proposal.issues);
       return;
     }
-    if (save(proposal.next, `${order.id} allocated to ${proposal.trip.id}.`)) {
+    try {
+      await planningService.createTrip({
+        depot,
+        operatingDate: date,
+        vehicleId,
+        orderIds: [order.id],
+        departure: proposal.trip.departure,
+      });
+      await reloadPlanning();
       setSelected([]);
-      setTripId(proposal.trip.id);
-      openRoute(proposal.trip.id);
+      setMessage(`${order.orderNumber} allocated by the server.`);
+      navigateView("routes");
+    } catch (error) {
+      setAssignmentErrors([error instanceof Error ? error.message : "Allocation failed."]);
     }
   }
 
@@ -498,7 +478,45 @@ export function DispatcherDashboard() {
       setFailure(checks.join(" "));
       return;
     }
-    if (save(next, "Route vehicle updated.")) openRoute(activeTrip.id);
+    void updateTrip(updated);
+  }
+
+  async function publishCurrentPlan() {
+    const versionId = plan.versionIds[depot];
+    if (!versionId) {
+      setFailure("Create at least one persisted trip before publishing this depot plan.");
+      return;
+    }
+    try {
+      await planningService.publish(versionId);
+      await reloadPlanning();
+      setModal(null);
+      setMessage("Plan published. Loader manifests, driver routes, store ETAs, notifications, and audit history are now available.");
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Plan publication failed.");
+    }
+  }
+
+  async function reviseCurrentPlan() {
+    const versionId = plan.versionIds[depot];
+    if (!versionId) return;
+    try {
+      await planningService.revise(versionId, "Dispatcher reopened the published plan for an operational revision.");
+      await reloadPlanning();
+      setMessage("A new draft revision was created. Affected loading verification is now stale until republished.");
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Plan revision could not be created.");
+    }
+  }
+
+  async function reinstateOrder(orderId: string) {
+    try {
+      await planningService.reinstate(orderId);
+      await reloadPlanning();
+      setMessage("Order returned to the planning backlog.");
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Order could not be reinstated.");
+    }
   }
   if (!session)
     return (
@@ -597,7 +615,8 @@ export function DispatcherDashboard() {
             <span>Dispatcher workspace</span>
           </div>
           <div>
-            <span className="demo-label">Demo data</span>
+            <span className="demo-label">Live operations</span>
+            <SharedAccountTools session={session} />
             <WorkspaceTools
               state={workspace}
               plan={plan}
@@ -666,27 +685,15 @@ export function DispatcherDashboard() {
             </div>
             <Button
               className="dispatch-primary"
-              disabled={!isDemoDate}
-              onClick={() =>
-                published
-                  ? save(
-                      {
-                        ...plan,
-                        published: plan.published.filter(
-                          (item) => item !== depot,
-                        ),
-                      },
-                      "Demo plan reopened. No real manifests have been changed.",
-                    )
-                  : setModal("publish")
-              }
+              disabled={planningLoading}
+              onClick={() => published ? void reviseCurrentPlan() : setModal("publish")}
             >
               {published ? (
                 <Undo2 aria-hidden="true" />
               ) : (
                 <FileCheck2 aria-hidden="true" />
               )}
-              {published ? "Reopen draft" : "Review plan"}
+              {published ? "Create revision" : "Review plan"}
             </Button>
           </div>
           <div className="dispatch-controls">
@@ -723,7 +730,7 @@ export function DispatcherDashboard() {
             </div>
             <span className={`plan-status ${published ? "is-published" : ""}`}>
               <span />
-              {published ? "Published locally" : "Draft plan"}
+              {published ? "Published" : "Draft plan"}
             </span>
           </div>
           {["planning", "fleet", "routes", "deferrals"].includes(view) && (
@@ -759,24 +766,12 @@ export function DispatcherDashboard() {
             <div className="dispatch-published">
               <CheckCircle2 size={19} aria-hidden="true" />
               <span>
-                This depot’s demo plan is locked. Reopen the draft to make
-                changes. Nothing has been sent to loaders, drivers or stores.
+                This depot plan is published and locked. Create a revision to
+                change it; affected roles are already working from this version.
               </span>
             </div>
           )}
-          {!isDemoDate && !["outlets", "calendar", "chat"].includes(view) ? (
-            <section className="dispatch-empty">
-              <ClipboardList size={32} aria-hidden="true" />
-              <h2>No demo orders for this day</h2>
-              <p>
-                The sample scenario is available for 3 October 2026. Real
-                operating dates will come from the backend.
-              </p>
-              <Button variant="outline" onClick={() => setDate(DEMO_DATE)}>
-                Return to demo day
-              </Button>
-            </section>
-          ) : view === "overview" ? (
+          {view === "overview" ? (
             <DispatchOverview
               plan={plan}
               depot={depot}
@@ -830,17 +825,7 @@ export function DispatcherDashboard() {
                 setDeferralError("");
                 setModal("defer");
               }}
-              onReturn={(orderId) =>
-                save(
-                  {
-                    ...plan,
-                    deferrals: plan.deferrals.filter(
-                      (entry) => entry.orderId !== orderId,
-                    ),
-                  },
-                  "Order returned to the backlog.",
-                )
-              }
+              onReturn={(orderId) => void reinstateOrder(orderId)}
               onRoute={openRoute}
               errors={assignmentErrors}
             />
@@ -1336,7 +1321,7 @@ export function DispatcherDashboard() {
                                       {formatTime(stop.start)} –{" "}
                                       {formatTime(stop.end)}{" "}
                                       <span className="small-note">
-                                        demo estimate
+                                        planning estimate
                                       </span>
                                     </span>
                                   </div>
@@ -1406,15 +1391,10 @@ export function DispatcherDashboard() {
                               <button
                                 className="dispatch-text-button"
                                 onClick={() =>
-                                  save(
-                                    {
-                                      ...plan,
-                                      trips: plan.trips.filter(
-                                        (trip) => trip.id !== activeTrip.id,
-                                      ),
-                                    },
-                                    "Empty trip removed.",
-                                  )
+                                  void planningService.removeTrip(activeTrip)
+                                    .then(reloadPlanning)
+                                    .then(() => setMessage("Empty trip removed and its orders returned to the backlog."))
+                                    .catch((error: unknown) => setFailure(error instanceof Error ? error.message : "Trip removal failed."))
                                 }
                               >
                                 Remove empty trip
@@ -1493,23 +1473,13 @@ export function DispatcherDashboard() {
               depot={depot}
               published={published}
               onIntake={inspectOrder}
-              onReturn={(orderId) =>
-                save(
-                  {
-                    ...plan,
-                    deferrals: plan.deferrals.filter(
-                      (entry) => entry.orderId !== orderId,
-                    ),
-                  },
-                  orderId + " returned to the backlog.",
-                )
-              }
+              onReturn={(orderId) => void reinstateOrder(orderId)}
             />
           )}
           <footer className="dispatch-footer">
             <span>
-              Sample orders, vehicles and route estimates. Changes stay in this
-              browser.
+              Orders, vehicles, plans and route state are loaded from the
+              Waypoint operations API.
             </span>
             <span>Waypoint Fresh / Style / Tech</span>
           </footer>
@@ -1700,25 +1670,17 @@ export function DispatcherDashboard() {
                 </div>
               )}
               <p>
-                This saves a local publication preview and locks the demo plan.
-                Backend broadcasts and real loading manifests are not connected.
+                Publication is authoritative: the server versions and locks the
+                plan, releases Loader manifests and Driver routes, updates store
+                ETAs, and records notifications and audit events.
               </p>
               <Button
                 className="dispatch-primary"
                 disabled={!canPublish || published}
-                onClick={() => {
-                  if (
-                    canPublish &&
-                    save(
-                      { ...plan, published: [...plan.published, depot] },
-                      "Demo plan published locally. No notifications were sent.",
-                    )
-                  )
-                    setModal(null);
-                }}
+                onClick={() => void publishCurrentPlan()}
               >
                 <Check size={17} aria-hidden="true" />
-                Publish demo plan
+                Publish plan
               </Button>
             </div>
           )}

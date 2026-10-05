@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { WifiOff } from "lucide-react";
 import "./driver.css";
 import "@/features/dispatcher/monochrome.css";
+import "@/features/dispatcher/workspace.css";
 
 import { useDriverState } from "./driver-state";
 import type { StopItem, ProofOfDeliveryRecord, StopExceptionRecord, PreTripChecklist } from "./driver-types";
@@ -35,6 +36,8 @@ export function DriverApp() {
     effectiveOnline,
     isSimulatedOffline,
     isSyncing,
+    isLoading,
+    error,
     activeStop,
     completedCount,
     unsyncedCount,
@@ -48,7 +51,7 @@ export function DriverApp() {
     completeRouteAndReturn,
     triggerSync,
     toggleSimulatedOffline,
-    resetDemoState,
+    reload,
   } = useDriverState();
 
   const [currentTab, setCurrentTab] = useState<DriverNavTab>("home");
@@ -61,8 +64,14 @@ export function DriverApp() {
   const [showDelayModal, setShowDelayModal] = useState<boolean>(false);
   const [showOperations, setShowOperations] = useState<boolean>(false);
 
-  const selectedStop = route.stops.find((s) => s.id === selectedStopId);
-  const pendingStopsCount = route.stops.length - completedCount;
+  const selectedStop = route?.stops.find((s) => s.id === selectedStopId);
+  const pendingStopsCount = (route?.stops.length ?? 0) - completedCount;
+
+  useEffect(() => {
+    const active = authService.getSession();
+    if (!active) router.replace("/login");
+    else if (active.role !== "driver") router.replace(`/workspace/${active.role}`);
+  }, [router]);
 
   const handleSignOut = () => {
     authService.signOut();
@@ -77,11 +86,24 @@ export function DriverApp() {
     setSelectedStopId(null);
   };
 
-  if (!isHydrated) {
+  if (!isHydrated || isLoading) {
     return (
       <div className="driver-app-shell" aria-busy="true">
         <div className="driver-viewport-wrapper driver-loading-shell">
           <span>Loading today&apos;s assigned run…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!route) {
+    return (
+      <div className="driver-app-shell">
+        <div className="driver-viewport-wrapper driver-loading-shell">
+          <strong>No active trip is assigned</strong>
+          <span>{error || "A published trip will appear here after warehouse departure clearance."}</span>
+          <button type="button" onClick={() => void reload()}>Refresh assignments</button>
+          <button type="button" onClick={handleSignOut}>Sign out</button>
         </div>
       </div>
     );
@@ -236,10 +258,6 @@ export function DriverApp() {
           unsyncedCount={unsyncedCount}
           onToggleOffline={toggleSimulatedOffline}
           onTriggerSync={triggerSync}
-          onResetDemo={() => {
-            resetDemoState();
-            setShowOperations(false);
-          }}
           onSignOut={handleSignOut}
           onClose={() => setShowOperations(false)}
         />

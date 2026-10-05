@@ -1,284 +1,198 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, Search, Send } from "lucide-react";
-import { contacts, type WorkspaceState } from "./workspace-state";
+import { authService } from "@/features/auth/auth-service";
+import { apiRequest } from "@/lib/api-client";
+import type { WorkspaceState } from "./workspace-state";
 import type { Depot } from "./planning";
 
-export function WorkspaceChat({
-  state,
-  depot,
-  onSave,
-}: {
-  state: WorkspaceState;
-  depot: Depot;
-  onSave: (value: WorkspaceState, feedback: string) => boolean;
-}) {
-  const [role, setRole] = useState("All roles");
-  const [query, setQuery] = useState("");
+type Participant = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  depotId?: string | null;
+  outletId?: string | null;
+};
+
+type Conversation = {
+  id: string;
+  title?: string | null;
+  updatedAt: string;
+  participants: Participant[];
+};
+
+type Message = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+};
+
+type DirectoryEntry = {
+  id: string;
+  conversationId?: string;
+  label: string;
+  role: string;
+  participantIds: string[];
+};
+
+type WorkspaceChatProps = {
+  state?: WorkspaceState;
+  depot?: Depot;
+  onSave?: (value: WorkspaceState, feedback: string) => boolean;
+};
+
+function roleLabel(role: string) {
+  return role.replace("store_manager", "store manager").replaceAll("_", " ");
+}
+
+export function WorkspaceChat(_props: WorkspaceChatProps) {
+  const session = authService.getSession();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [contacts, setContacts] = useState<Participant[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const thread = useRef<HTMLDivElement>(null);
-  const conversation = useRef<HTMLElement>(null);
-  const filtered = contacts.filter(
-    (c) =>
-      c.depot === depot &&
-      (role === "All roles" || role === c.role) &&
-      `${c.name} ${c.role}`.toLowerCase().includes(query.toLowerCase()),
-  );
-  const selected = filtered.find((c) => c.id === selectedId) ?? filtered[0];
-  const messages = state.messages.filter((m) => m.contactId === selected?.id);
-  const messageCount = messages.length;
+
+  const loadDirectory = useCallback(async () => {
+    const [conversationRows, contactRows] = await Promise.all([
+      apiRequest<Conversation[]>("/messages/conversations"),
+      apiRequest<Participant[]>("/messages/contacts"),
+    ]);
+    setConversations(conversationRows);
+    setContacts(contactRows);
+    setSelectedId((current) => current ?? conversationRows[0]?.id ?? (contactRows[0] ? `contact:${contactRows[0].id}` : null));
+  }, []);
+
   useEffect(() => {
-    if (thread.current) thread.current.scrollTop = thread.current.scrollHeight;
-  }, [selected?.id, messageCount]);
-  function send() {
-    if (!selected || !text.trim()) {
-      setError("Write a message first.");
+    void loadDirectory()
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Conversations could not be loaded."))
+      .finally(() => setLoading(false));
+  }, [loadDirectory]);
+
+  const entries = useMemo<DirectoryEntry[]>(() => {
+    const existingParticipants = new Set<string>();
+    const conversationEntries = conversations.map((conversation) => {
+      const others = conversation.participants.filter((participant) => participant.id !== session?.userId);
+      others.forEach((participant) => existingParticipants.add(participant.id));
+      return {
+        id: conversation.id,
+        conversationId: conversation.id,
+        label: conversation.title || others.map((participant) => `${participant.firstName} ${participant.lastName}`).join(", ") || "Operations conversation",
+        role: others.map((participant) => roleLabel(participant.role)).join(", ") || "Operations",
+        participantIds: others.map((participant) => participant.id),
+      };
+    });
+    const newEntries = contacts
+      .filter((contact) => !existingParticipants.has(contact.id))
+      .map((contact) => ({
+        id: `contact:${contact.id}`,
+        label: `${contact.firstName} ${contact.lastName}`,
+        role: roleLabel(contact.role),
+        participantIds: [contact.id],
+      }));
+    return [...conversationEntries, ...newEntries];
+  }, [contacts, conversations, session?.userId]);
+
+  const filtered = entries.filter((entry) => `${entry.label} ${entry.role}`.toLowerCase().includes(query.toLowerCase()));
+  const selected = entries.find((entry) => entry.id === selectedId) ?? filtered[0] ?? null;
+
+  useEffect(() => {
+    if (!selected?.conversationId) {
+      setMessages([]);
       return;
     }
-    if (
-      onSave(
-        {
-          ...state,
-          messages: [
-            ...state.messages,
-            {
-              id: crypto.randomUUID(),
-              contactId: selected.id,
-              text: text.trim(),
-              outgoing: true,
-              at: new Date().toISOString(),
-            },
-          ],
-        },
-        "Message saved locally. No external message was sent.",
-      )
-    ) {
+    void apiRequest<Message[]>(`/messages/conversations/${selected.conversationId}`)
+      .then((rows) => {
+        setMessages(rows);
+        return apiRequest(`/messages/conversations/${selected.conversationId}/read`, { method: "POST" });
+      })
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Message history could not be loaded."));
+  }, [selected?.conversationId]);
+
+  useEffect(() => {
+    thread.current?.scrollTo({ top: thread.current.scrollHeight });
+  }, [messages]);
+
+  async function send() {
+    if (!selected || !text.trim()) return;
+    setSending(true);
+    try {
+      if (selected.conversationId) {
+        const sent = await apiRequest<Message>(`/messages/conversations/${selected.conversationId}`, {
+          method: "POST",
+          body: JSON.stringify({ content: text.trim() }),
+        });
+        setMessages((current) => [...current, sent]);
+      } else {
+        const created = await apiRequest<{ conversation: Conversation; initialMessage: Message }>("/messages/conversations", {
+          method: "POST",
+          body: JSON.stringify({ participantIds: selected.participantIds, initialMessage: text.trim() }),
+        });
+        await loadDirectory();
+        setSelectedId(created.conversation.id);
+        setMessages(created.initialMessage ? [created.initialMessage] : []);
+      }
       setText("");
       setError("");
-    } else
-      setError("The message was not saved. Your text is preserved; try again.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The message could not be sent.");
+    } finally {
+      setSending(false);
+    }
   }
+
   return (
     <div className="chat-workspace">
-      <aside
-        className="workspace-panel chat-directory"
-        aria-label="Demo conversations"
-      >
-        <div className="workspace-panel-heading">
-          <h2>Conversations</h2>
-          <MessageSquare size={18} />
-        </div>
+      <aside className="workspace-panel chat-directory" aria-label="Conversations">
+        <div className="workspace-panel-heading"><h2>Conversations</h2><MessageSquare size={18} /></div>
         <div className="chat-directory-filters">
           <label className="dispatch-search">
             <Search size={16} />
-            <input
-              aria-label="Search conversations"
-              placeholder="Search team or outlet"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+            <input aria-label="Search conversations" placeholder="Search people or roles" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
-          <select
-            aria-label="Filter conversation role"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-          >
-            {[
-              "All roles",
-              "Dispatcher",
-              "Loader",
-              "Driver",
-              "Store manager",
-            ].map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
         </div>
-        <div
-          className="chat-contacts"
-          tabIndex={0}
-          aria-label="Scrollable conversations"
-        >
-          {filtered.map((c) => {
-            const latest = state.messages
-              .filter((m) => m.contactId === c.id)
-              .at(-1);
-            const unread = state.messages.filter(
-              (m) =>
-                m.contactId === c.id &&
-                !m.outgoing &&
-                !state.read.includes(m.id),
-            ).length;
-            return (
-              <button
-                key={c.id}
-                aria-label={`Open conversation ${c.name}`}
-                aria-pressed={selected?.id === c.id}
-                onClick={() => {
-                  setSelectedId(c.id);
-                  setError("");
-                  requestAnimationFrame(() => {
-                    if (matchMedia("(max-width: 760px)").matches) {
-                      conversation.current?.focus();
-                      conversation.current?.scrollIntoView({
-                        block: "start",
-                        behavior: "smooth",
-                      });
-                    }
-                  });
-                }}
-              >
-                <span className="contact-avatar">
-                  {c.role.slice(0, 2).toUpperCase()}
-                </span>
-                <span>
-                  <strong>{c.name}</strong>
-                  <small>{c.role}</small>
-                  <small className="chat-preview">
-                    {latest?.text ?? "Start a local conversation"}
-                  </small>
-                </span>
-                {unread > 0 && (
-                  <span className="workspace-count">{unread}</span>
-                )}
-              </button>
-            );
-          })}
-          {!filtered.length && (
-            <div className="workspace-empty">
-              <h3>No conversations found</h3>
-              <p>Try another role or search term.</p>
-            </div>
-          )}
+        <div className="chat-contacts" tabIndex={0} aria-label="Conversation directory">
+          {filtered.map((entry) => (
+            <button key={entry.id} aria-pressed={selected?.id === entry.id} onClick={() => { setSelectedId(entry.id); setError(""); }}>
+              <span className="contact-avatar">{entry.role.slice(0, 2).toUpperCase()}</span>
+              <span><strong>{entry.label}</strong><small>{entry.role}</small><small className="chat-preview">{entry.conversationId ? "Open conversation" : "Start conversation"}</small></span>
+            </button>
+          ))}
+          {!loading && !filtered.length && <div className="workspace-empty"><h3>No contacts found</h3><p>No active operational users match the search.</p></div>}
         </div>
       </aside>
-      <section
-        className="workspace-panel chat-conversation"
-        aria-label="Conversation"
-        tabIndex={-1}
-        ref={conversation}
-      >
+
+      <section className="workspace-panel chat-conversation" aria-label="Conversation">
         {selected ? (
           <>
             <div className="chat-thread-heading">
-              <span className="contact-avatar">
-                {selected.role.slice(0, 2).toUpperCase()}
-              </span>
-              <div>
-                <h2>{selected.name}</h2>
-                <p>
-                  {selected.role} · {selected.context}
-                </p>
-              </div>
-              <button
-                className="dispatch-text-button"
-                disabled={
-                  !messages.some(
-                    (m) => !m.outgoing && !state.read.includes(m.id),
-                  )
-                }
-                onClick={() =>
-                  onSave(
-                    {
-                      ...state,
-                      read: [
-                        ...new Set([
-                          ...state.read,
-                          ...messages
-                            .filter((m) => !m.outgoing)
-                            .map((m) => m.id),
-                        ]),
-                      ],
-                    },
-                    "Conversation marked as read locally.",
-                  )
-                }
-              >
-                Mark as read
-              </button>
+              <span className="contact-avatar">{selected.role.slice(0, 2).toUpperCase()}</span>
+              <div><h2>{selected.label}</h2><p>{selected.role} · shared operational channel</p></div>
             </div>
-            <p className="workspace-note chat-demo-note">
-              Demo conversation. Messages stay in this browser and are not
-              delivered to people.
-            </p>
-            <div
-              className="chat-thread"
-              ref={thread}
-              tabIndex={0}
-              aria-label="Scrollable message history"
-              role="log"
-              aria-live="polite"
-            >
-              {messages.length ? (
-                messages.map((m) => (
-                  <article
-                    key={m.id}
-                    className={`chat-message ${m.outgoing ? "outgoing" : "incoming"}`}
-                  >
-                    <p>{m.text}</p>
-                    <small>
-                      {m.outgoing
-                        ? "You · Saved locally"
-                        : "Sample incoming message"}{" "}
-                      ·{" "}
-                      {new Intl.DateTimeFormat("en", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "Asia/Colombo",
-                      }).format(new Date(m.at))}
-                    </small>
-                  </article>
-                ))
-              ) : (
-                <div className="workspace-empty">
-                  <MessageSquare size={28} />
-                  <h3>Start a local conversation</h3>
-                  <p>No messages in this demo thread yet.</p>
-                </div>
-              )}
+            <div className="chat-thread" ref={thread} tabIndex={0} role="log" aria-live="polite">
+              {messages.length ? messages.map((message) => (
+                <article key={message.id} className={`chat-message ${message.senderId === session?.userId ? "outgoing" : "incoming"}`}>
+                  <p>{message.content}</p>
+                  <small>{message.senderId === session?.userId ? "You" : selected.label} · {new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Colombo" }).format(new Date(message.createdAt))}</small>
+                </article>
+              )) : <div className="workspace-empty"><MessageSquare size={28} /><h3>Start the conversation</h3><p>Messages are shared across role workspaces and stored centrally.</p></div>}
             </div>
-            <form
-              className="chat-compose"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send();
-              }}
-            >
-              <label className="sr-only" htmlFor="local-chat-message">
-                Message text
-              </label>
-              <textarea
-                id="local-chat-message"
-                aria-label="Message text"
-                placeholder="Write a local demo message…"
-                value={text}
-                maxLength={2000}
-                onChange={(e) => setText(e.target.value)}
-                rows={2}
-              />
-              <button
-                className="workspace-action"
-                type="submit"
-                disabled={!text.trim()}
-              >
-                <Send size={17} /> Save message
-              </button>
+            <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+              <textarea aria-label="Message text" placeholder="Write an operational message…" value={text} maxLength={4000} onChange={(event) => setText(event.target.value)} rows={2} />
+              <button className="workspace-action" type="submit" disabled={!text.trim() || sending}><Send size={17} />{sending ? "Sending…" : "Send message"}</button>
             </form>
-            {error && (
-              <p className="workspace-form-error chat-error" role="alert">
-                {error}
-              </p>
-            )}
+            {error && <p className="workspace-form-error chat-error" role="alert">{error}</p>}
           </>
-        ) : (
-          <div className="workspace-empty">
-            <h2>Select a conversation</h2>
-            <p>Change your filters to show this depot’s demo contacts.</p>
-          </div>
-        )}
+        ) : <div className="workspace-empty"><h2>No conversations available</h2><p>Active operational contacts will appear here.</p></div>}
       </section>
     </div>
   );

@@ -12,6 +12,8 @@ import { SyncModule } from './sync/sync.module';
 import { MasterDataModule } from './master-data/master-data.module';
 import { HealthModule } from './health/health.module';
 import { StoreModule } from './store/store.module';
+import { AuditModule } from './audit/audit.module';
+import { CommunicationsModule } from './communications/communications.module';
 
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -34,6 +36,8 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
     MasterDataModule,
     HealthModule,
     StoreModule,
+    AuditModule,
+    CommunicationsModule,
   ],
   providers: [
     {

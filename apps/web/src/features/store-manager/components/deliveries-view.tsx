@@ -7,6 +7,7 @@ import {
   Clock3,
   FileCheck2,
   MapPin,
+  LoaderCircle,
   ShieldAlert,
   Snowflake,
   Sun,
@@ -15,7 +16,7 @@ import {
 } from "lucide-react";
 import { DiscrepancyModal } from "./discrepancy-modal";
 import { PodModal } from "./pod-modal";
-import type { StoreDeliveryCard } from "../store-manager-api";
+import { storeApi, type StoreDeliveryCard } from "../store-manager-api";
 import { deliveryStatusMeta, formatDate, formatTime } from "../store-manager-format";
 
 interface DeliveriesViewProps {
@@ -39,6 +40,24 @@ export function DeliveriesView({ deliveries, outletWindow, onRefresh }: Deliveri
   const [filter, setFilter] = useState<DeliveryFilter>("ALL");
   const [podDelivery, setPodDelivery] = useState<StoreDeliveryCard | null>(null);
   const [claimDelivery, setClaimDelivery] = useState<StoreDeliveryCard | null>(null);
+  const [receivingId, setReceivingId] = useState<string | null>(null);
+  const [receiptError, setReceiptError] = useState("");
+
+  async function confirmReceipt(delivery: StoreDeliveryCard) {
+    setReceivingId(delivery.tripStopId);
+    setReceiptError("");
+    try {
+      await storeApi.confirmReceipt({
+        orderId: delivery.orderId,
+        tripStopId: delivery.tripStopId,
+      });
+      onRefresh();
+    } catch (error) {
+      setReceiptError(error instanceof Error ? error.message : "Receipt confirmation failed.");
+    } finally {
+      setReceivingId(null);
+    }
+  }
 
   const visibleDeliveries = useMemo(
     () => deliveries.filter((delivery) => {
@@ -102,6 +121,8 @@ export function DeliveriesView({ deliveries, outletWindow, onRefresh }: Deliveri
           </div>
         </header>
 
+        {receiptError && <p className="store-inline-error" role="alert">{receiptError}</p>}
+
         {visibleDeliveries.length === 0 ? (
           <div className="store-empty-state"><Truck size={22} /><strong>No matching movements</strong><span>Published routes will appear here for receiving preparation.</span></div>
         ) : (
@@ -155,6 +176,12 @@ export function DeliveriesView({ deliveries, outletWindow, onRefresh }: Deliveri
                     </div>
                   )}
 
+                  {delivery.receipt && (
+                    <div className="store-inline-notices">
+                      <p><CheckCircle2 size={15} /><span><strong>Receiving outcome</strong>{delivery.receipt.status === "CONFIRMED" ? "Receipt confirmed by the store." : "Receiving discrepancy submitted."}</span></p>
+                    </div>
+                  )}
+
                   <footer>
                     <p>
                       {delivery.status === "DELIVERED"
@@ -167,7 +194,12 @@ export function DeliveriesView({ deliveries, outletWindow, onRefresh }: Deliveri
                     </p>
                     <div>
                       {delivery.proofOfDelivery && <button className="store-secondary-button" type="button" onClick={() => setPodDelivery(delivery)}><FileCheck2 size={15} /> View POD</button>}
-                      {delivery.status === "DELIVERED" && <button className="store-primary-button" type="button" onClick={() => setClaimDelivery(delivery)}><ShieldAlert size={15} /> Report discrepancy</button>}
+                      {delivery.status === "DELIVERED" && !delivery.receipt && delivery.proofOfDelivery && !hasClaims && (
+                        <button className="store-primary-button" type="button" disabled={receivingId === delivery.tripStopId} onClick={() => void confirmReceipt(delivery)}>
+                          {receivingId === delivery.tripStopId ? <LoaderCircle className="loading-spinner" size={15} /> : <CheckCircle2 size={15} />} Confirm receipt
+                        </button>
+                      )}
+                      {delivery.status === "DELIVERED" && !delivery.receipt && <button className="store-secondary-button" type="button" onClick={() => setClaimDelivery(delivery)}><ShieldAlert size={15} /> Report discrepancy</button>}
                     </div>
                   </footer>
                 </article>

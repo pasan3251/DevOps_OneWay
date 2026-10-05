@@ -33,6 +33,10 @@ export class ArriveAtStopDto {
   @IsOptional()
   @IsNumber()
   currentLongitude?: number;
+
+  @IsOptional()
+  @IsISO8601()
+  occurredAt?: string;
 }
 
 export class SubmitProofOfDeliveryDto {
@@ -95,6 +99,34 @@ export class FailStopDto {
   @IsOptional()
   @IsString()
   driverNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  photoEvidenceUrl?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  affectedCartons?: number;
+
+  @IsOptional()
+  @IsISO8601()
+  occurredAt?: string;
+}
+
+export class ReportDelayDto {
+  @IsInt()
+  @Min(1)
+  @Max(720)
+  delayMinutes!: number;
+
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+
+  @IsOptional()
+  @IsISO8601()
+  occurredAt?: string;
 }
 
 export class ConfirmDepotReturnDto {

@@ -1,7 +1,10 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { eq } from 'drizzle-orm';
+import { DRIZZLE_ORM, DrizzleDb } from '../database/database.module';
+import * as schema from '../database/schema';
 
 export interface JwtPayload {
   sub: string;
@@ -13,7 +16,10 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
+  constructor(
+    configService: ConfigService,
+    @Inject(DRIZZLE_ORM) private readonly db: DrizzleDb,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -28,12 +34,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!payload || !payload.sub) {
       throw new UnauthorizedException('Invalid authentication credentials');
     }
+    const user = await this.db.query.users.findFirst({
+      where: eq(schema.users.id, payload.sub),
+    });
+    if (!user?.isActive) {
+      throw new UnauthorizedException('User account is invalid or deactivated');
+    }
     return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      depotId: payload.depotId,
-      outletId: payload.outletId,
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      depotId: user.depotId,
+      outletId: user.outletId,
     };
   }
 }

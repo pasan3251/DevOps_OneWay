@@ -6,7 +6,6 @@ import {
   LogOut,
   PhoneCall,
   RefreshCw,
-  RotateCcw,
   Thermometer,
   Truck,
   User,
@@ -15,6 +14,8 @@ import {
 } from "lucide-react";
 import type { DriverRouteData } from "../driver-types";
 import { Button } from "@/components/ui/button";
+import { authService } from "@/features/auth/auth-service";
+import { SharedAccountTools } from "@/features/shared/account-tools";
 
 interface DriverOperationsSheetProps {
   route: DriverRouteData;
@@ -24,7 +25,6 @@ interface DriverOperationsSheetProps {
   unsyncedCount: number;
   onToggleOffline: () => void;
   onTriggerSync: () => void;
-  onResetDemo: () => void;
   onSignOut: () => void;
   onClose: () => void;
 }
@@ -37,10 +37,10 @@ export function DriverOperationsSheet({
   unsyncedCount,
   onToggleOffline,
   onTriggerSync,
-  onResetDemo,
   onSignOut,
   onClose,
 }: DriverOperationsSheetProps) {
+  const session = authService.getSession();
   return (
     <div className="driver-sheet-overlay" role="dialog" aria-modal="true" aria-label="Driver and vehicle details">
       <div className="driver-sheet-content driver-operations-sheet">
@@ -65,7 +65,7 @@ export function DriverOperationsSheet({
           <div><Truck size={16} /><span>Assigned vehicle<strong>{route.vehicle.id} · {route.vehicle.plate}</strong></span></div>
           <div><Fuel size={16} /><span>Fuel remaining<strong>{route.vehicle.fuelRemainingLiters} litres</strong></span></div>
           {route.vehicle.chilled && (
-            <div><Thermometer size={16} /><span>Reefer status<strong>{route.vehicle.reeferTemperatureC.toFixed(1)}°C · running</strong></span></div>
+            <div><Thermometer size={16} /><span>Reefer status<strong>{route.vehicle.reeferTemperatureC === null ? "Physical check required" : `${route.vehicle.reeferTemperatureC.toFixed(1)}°C`}</strong></span></div>
           )}
           <div>{effectiveOnline ? <Wifi size={16} /> : <CloudOff size={16} />}<span>Field records<strong>{effectiveOnline ? "Connected" : "Stored offline"} · {unsyncedCount} pending</strong></span></div>
         </section>
@@ -80,23 +80,24 @@ export function DriverOperationsSheet({
           {isSyncing ? "Synchronizing records…" : "Synchronize field records"}
         </Button>
 
+        {session && <div className="flex gap-2"><SharedAccountTools session={session} compact={false} /></div>}
+
         <a href="tel:+94112489000" className="driver-dispatch-contact">
           <PhoneCall size={17} />
           <span><strong>Call dispatch</strong><small>Route changes, emergencies and breakdown support</small></span>
         </a>
 
-        <details className="driver-demo-controls">
-          <summary>Demo controls</summary>
-          <div>
-            <Button type="button" variant="outline" onClick={onToggleOffline}>
-              {isSimulatedOffline ? <Wifi size={15} /> : <CloudOff size={15} />}
-              {isSimulatedOffline ? "Restore demo signal" : "Simulate signal loss"}
-            </Button>
-            <Button type="button" variant="outline" onClick={onResetDemo}>
-              <RotateCcw size={15} /> Reset demo route
-            </Button>
-          </div>
-        </details>
+        {process.env.NODE_ENV !== "production" && (
+          <details className="driver-demo-controls">
+            <summary>Offline testing</summary>
+            <div>
+              <Button type="button" variant="outline" onClick={onToggleOffline}>
+                {isSimulatedOffline ? <Wifi size={15} /> : <CloudOff size={15} />}
+                {isSimulatedOffline ? "Restore connection" : "Simulate signal loss"}
+              </Button>
+            </div>
+          </details>
+        )}
 
         <Button variant="outline" onClick={onSignOut} className="w-full h-11">
           <LogOut size={16} /> Sign out

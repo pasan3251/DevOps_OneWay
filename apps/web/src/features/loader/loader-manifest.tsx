@@ -84,29 +84,15 @@ export type ManifestVerification = {
 };
 
 export function generateSkusForOrder(order: Order) {
-  if (order.brand === "Fresh") {
-    if (order.chilled) {
-      return [
-        { sku: "SKU-CHL-01", name: "Dairy crates", qty: Math.ceil((order.kg * 0.45) / 10), unit: "crates", temp: "Chilled", unitKg: 10, unitM3: 0.05 },
-        { sku: "SKU-CHL-02", name: "Meat and poultry", qty: Math.ceil((order.kg * 0.35) / 12), unit: "totes", temp: "Chilled", unitKg: 12, unitM3: 0.06 },
-        { sku: "SKU-CHL-03", name: "Fresh produce", qty: Math.ceil((order.kg * 0.2) / 8), unit: "cartons", temp: "Chilled", unitKg: 8, unitM3: 0.04 },
-      ];
-    }
-    return [
-      { sku: "SKU-AMB-01", name: "Dry groceries", qty: Math.ceil((order.kg * 0.6) / 15), unit: "cartons", temp: "Ambient", unitKg: 15, unitM3: 0.08 },
-      { sku: "SKU-AMB-02", name: "Bakery and staples", qty: Math.ceil((order.kg * 0.4) / 10), unit: "cartons", temp: "Ambient", unitKg: 10, unitM3: 0.05 },
-    ];
-  }
-  if (order.brand === "Style") {
-    return [
-      { sku: "SKU-STY-01", name: "Footwear and accessories", qty: Math.ceil((order.kg * 0.4) / 8), unit: "boxes", temp: "Ambient", unitKg: 8, unitM3: 0.07 },
-      { sku: "SKU-STY-02", name: "Apparel", qty: Math.ceil((order.kg * 0.6) / 12), unit: "garment packs", temp: "Ambient", unitKg: 12, unitM3: 0.1 },
-    ];
-  }
-  return [
-    { sku: "SKU-TCH-01", name: "Electronics and displays", qty: Math.ceil((order.kg * 0.5) / 25), unit: "heavy crates", temp: "Ambient", unitKg: 25, unitM3: 0.15 },
-    { sku: "SKU-TCH-02", name: "Accessories", qty: Math.ceil((order.kg * 0.5) / 15), unit: "cartons", temp: "Ambient", unitKg: 15, unitM3: 0.09 },
-  ];
+  return (order.items ?? []).map((item) => ({
+    sku: item.sku,
+    name: item.name,
+    qty: item.quantity,
+    unit: item.quantity === 1 ? "unit" : "units",
+    temp: item.temp,
+    unitKg: item.unitWeightKg,
+    unitM3: item.unitVolumeM3,
+  }));
 }
 
 function isIssueBlocking(record: DiscrepancyRecord) {
@@ -162,8 +148,8 @@ export function LoaderManifest({
   const vehicle = trip ? vehicles.find((item) => item.id === trip.vehicleId) : undefined;
   const tripOrders = trip
     ? trip.orderIds
-        .map((id) => orders.find((order) => order.id === id))
-        .filter((order) => order !== undefined)
+      .map((id) => orders.find((order) => order.id === id))
+      .filter((order) => order !== undefined)
     : [];
   const lifoOrderedStops = [...tripOrders].reverse();
   const sequenceSignature = trip?.orderIds.join("|") ?? "";
