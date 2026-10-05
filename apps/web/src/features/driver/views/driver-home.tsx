@@ -16,7 +16,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import type { DriverRouteData, StopItem } from "../driver-types";
-import { formatMinutesDuration, formatMinutesToTime } from "../driver-data";
+import { formatMinutesDuration, formatMinutesToTime } from "../driver-format";
 import { Button } from "@/components/ui/button";
 
 interface DriverHomeProps {

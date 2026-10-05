@@ -13,7 +13,7 @@ import {
   Thermometer,
 } from "lucide-react";
 import type { DriverRouteData, StopItem } from "../driver-types";
-import { formatMinutesToTime } from "../driver-data";
+import { formatMinutesToTime } from "../driver-format";
 import { DriverRouteMap } from "../components/driver-route-map";
 
 interface DriverRouteViewProps {

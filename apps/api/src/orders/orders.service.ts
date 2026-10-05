@@ -7,7 +7,7 @@ import {
   ForbiddenException,
   Optional,
 } from '@nestjs/common';
-import { eq, and, sql, desc, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc, inArray, SQL } from 'drizzle-orm';
 import { DRIZZLE_ORM, DrizzleDb } from '../database/database.module';
 import * as schema from '../database/schema';
 import { CreateOrderDto, OrderFilterDto } from './dto/order.dto';
@@ -204,7 +204,7 @@ export class OrdersService {
   }
 
   async listOrders(filter: OrderFilterDto) {
-    const conditions: any[] = [];
+    const conditions: SQL<unknown>[] = [];
 
     if (filter.orderDate) {
       conditions.push(eq(schema.orders.orderDate, filter.orderDate));
@@ -213,7 +213,7 @@ export class OrdersService {
       conditions.push(eq(schema.orders.brand, filter.brand));
     }
     if (filter.status) {
-      conditions.push(eq(schema.orders.status, filter.status as any));
+      conditions.push(eq(schema.orders.status, filter.status as typeof schema.orders.status.enumValues[number]));
     }
     if (filter.outletId) {
       conditions.push(eq(schema.orders.outletId, filter.outletId));
@@ -227,7 +227,7 @@ export class OrdersService {
       offset: filter.offset,
       orderBy: [desc(schema.orders.submissionTime)],
       with: {
-        outlet: true,
+        outlet: { with: { depot: true } },
         items: {
           with: {
             product: true,

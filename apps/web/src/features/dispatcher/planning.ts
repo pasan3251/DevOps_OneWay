@@ -8,6 +8,7 @@ export type Order = {
   outlet: string;
   depot: Depot;
   depotId: string;
+  coordinates: [number, number];
   brand: Brand;
   district: string;
   chilled: boolean;
@@ -34,6 +35,7 @@ export type Vehicle = {
   depot: Depot;
   depotId: string;
   type: "Truck" | "Van";
+  depotCoordinates: [number, number];
   chilled: boolean;
   kg: number;
   m3: number;
@@ -46,10 +48,16 @@ export type Trip = {
   recordId?: string;
   planVersionId?: string;
   status?: string;
+  operatingDate?: string;
   depot: Depot;
   vehicleId: string;
   orderIds: string[];
   departure: number;
+  estimateKey?: string;
+  plannedDurationMin?: number;
+  plannedDistanceKm?: number;
+  plannedFuelLitres?: number;
+  plannedStops?: Array<{ orderId: string; arrival: number }>;
 };
 export type Deferral = { orderId: string; reason: string; note: string };
 export type Plan = {
@@ -59,7 +67,9 @@ export type Plan = {
   versionIds: Partial<Record<Depot, string>>;
 };
 
-export const DEMO_DATE = "2026-10-05";
+export function currentOperatingDate() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
 export const orders: Order[] = [];
 export const vehicles: Vehicle[] = [];
 export const initialPlan: Plan = { trips: [], deferrals: [], published: [], versionIds: {} };
@@ -113,11 +123,13 @@ type BackendOrder = {
     name: string;
     district: string;
     depotId: string;
+    latitude: string;
+    longitude: string;
     isVanOnly: boolean;
     windowStart: string;
     windowEnd: string;
     serviceTimeMinutes?: string;
-    depot?: { name: string };
+    depot: { name: string };
   };
 };
 type BackendVehicle = {
@@ -132,7 +144,7 @@ type BackendVehicle = {
   fuelEfficiencyKmPerL: string;
   weeklyFuelQuotaL: string;
   weekToDateFuelUsedL: string;
-  depot: { name: string };
+  depot: { name: string; latitude: string; longitude: string };
 };
 type BackendDriver = { id: string; depotId: string; status: string };
 type BackendTrip = {
@@ -141,12 +153,16 @@ type BackendTrip = {
   planVersionId?: string | null;
   planVersion?: { versionNumber: number; status: "DRAFT" | "VALIDATED" | "PUBLISHED" | "SUPERSEDED" } | null;
   status: string;
+  operatingDate: string;
   depotId: string;
   vehicleId: string;
   plannedDepartureTime?: string | null;
-  depot: { name: string };
+  plannedDurationMin: number;
+  plannedDistanceKm: string;
+  plannedFuelLitres: string;
+  depot: { name: string; latitude: string; longitude: string };
   vehicle: { registrationNumber: string };
-  stops: Array<{ orderId: string; stopSequence: number }>;
+  stops: Array<{ orderId: string; stopSequence: number; plannedArrivalTime?: string | null }>;
 };
 type BackendLoaderManifest = {
   id: string;
@@ -176,7 +192,9 @@ export function totals(trip: Trip) {
 export function stopTimes(trip: Trip) {
   let clock = trip.departure;
   return tripOrders(trip).map((order) => {
-    const arrival = clock + order.travelMinutes;
+    const planned = trip.estimateKey === tripEstimateKey(trip)
+      ? trip.plannedStops?.find((stop) => stop.orderId === order.id) : undefined;
+    const arrival = planned?.arrival ?? clock + order.travelMinutes;
     const start = Math.max(arrival, order.window[0]);
     clock = start + order.serviceMinutes;
     return { order, arrival, start, end: clock };
@@ -184,14 +202,31 @@ export function stopTimes(trip: Trip) {
 }
 
 export function tripMinutes(trip: Trip) {
+  if (trip.estimateKey === tripEstimateKey(trip) && trip.plannedDurationMin !== undefined) return trip.plannedDurationMin;
   return tripOrders(trip).reduce((sum, order) => sum + order.travelMinutes + order.serviceMinutes, 0);
 }
 
 export function fuelLitres(trip: Trip) {
+  if (trip.estimateKey === tripEstimateKey(trip) && trip.plannedFuelLitres !== undefined) return trip.plannedFuelLitres;
   const vehicle = vehicles.find((item) => item.id === trip.vehicleId);
   if (!vehicle) return 0;
   const approximateDistance = tripOrders(trip).reduce((sum, order) => sum + order.travelMinutes * 0.5, 0) + (trip.orderIds.length ? 20 : 0);
   return approximateDistance / vehicle.kmPerL;
+}
+
+function tripEstimateKey(trip: Pick<Trip, "vehicleId" | "departure" | "orderIds">) {
+  return JSON.stringify([trip.vehicleId, trip.departure, trip.orderIds]);
+}
+
+function persistedEstimates(trip: BackendTrip) {
+  const orderIds = [...trip.stops].sort((a, b) => a.stopSequence - b.stopSequence).map((stop) => stop.orderId);
+  return {
+    estimateKey: tripEstimateKey({ vehicleId: trip.vehicle.registrationNumber, departure: dateMinutes(trip.plannedDepartureTime), orderIds }),
+    plannedDurationMin: trip.plannedDurationMin,
+    plannedDistanceKm: Number(trip.plannedDistanceKm),
+    plannedFuelLitres: Number(trip.plannedFuelLitres),
+    plannedStops: trip.stops.filter((stop) => stop.plannedArrivalTime).map((stop) => ({ orderId: stop.orderId, arrival: dateMinutes(stop.plannedArrivalTime) })),
+  };
 }
 
 export function validateTrip(trip: Trip, plan: Plan) {
@@ -239,8 +274,9 @@ export const planningService = {
       id: order.id,
       orderNumber: order.orderNumber,
       outlet: `${order.brand} · ${order.outlet.name}`,
-      depot: depotName(order.outlet.depot?.name ?? order.outlet.depotId),
+      depot: depotName(order.outlet.depot.name),
       depotId: order.outlet.depotId,
+      coordinates: [Number(order.outlet.latitude), Number(order.outlet.longitude)],
       brand: order.brand,
       district: order.outlet.district,
       chilled: order.tempRequirement === "chilled",
@@ -260,6 +296,7 @@ export const planningService = {
       driverId: driverRows.find((driver) => driver.depotId === vehicle.depotId && driver.status === "available")?.id,
       depot: depotName(vehicle.depot.name),
       depotId: vehicle.depotId,
+      depotCoordinates: [Number(vehicle.depot.latitude), Number(vehicle.depot.longitude)],
       type: vehicle.bodyType === "van" ? "Van" : "Truck",
       chilled: vehicle.refrigerationType === "reefer",
       kg: Number(vehicle.maxWeightKg),
@@ -283,10 +320,12 @@ export const planningService = {
       recordId: trip.id,
       planVersionId: trip.planVersionId ?? undefined,
       status: trip.status,
+      operatingDate: trip.operatingDate,
       depot: depotName(trip.depot.name),
       vehicleId: trip.vehicle.registrationNumber,
       orderIds: [...trip.stops].sort((a, b) => a.stopSequence - b.stopSequence).map((stop) => stop.orderId),
       departure: dateMinutes(trip.plannedDepartureTime),
+      ...persistedEstimates(trip),
     }));
     const deferrals = orderResponse.data
       .filter((order) => order.status === "QUEUED_NEXT_RUN" && order.deferredCount > 0)
@@ -312,6 +351,7 @@ export const planningService = {
         driverId: trip.driver.id,
         depot,
         depotId: trip.vehicle.depotId,
+        depotCoordinates: [Number(trip.depot.latitude), Number(trip.depot.longitude)],
         type: trip.vehicle.bodyType === "van" ? "Van" : "Truck",
         chilled: trip.vehicle.refrigerationType === "reefer",
         kg: Number(trip.vehicle.maxWeightKg),
@@ -328,6 +368,7 @@ export const planningService = {
           outlet: `${order.brand} · ${stop.outlet.name}`,
           depot,
           depotId: stop.outlet.depotId,
+          coordinates: [Number(stop.outlet.latitude), Number(stop.outlet.longitude)],
           brand: order.brand,
           district: stop.outlet.district,
           chilled: order.tempRequirement === "chilled",
@@ -353,10 +394,12 @@ export const planningService = {
         recordId: trip.id,
         planVersionId: item.planVersionId,
         status: trip.status,
+        operatingDate: trip.operatingDate,
         depot,
         vehicleId: trip.vehicle.registrationNumber,
         orderIds: [...trip.stops].sort((a, b) => a.stopSequence - b.stopSequence).map((stop) => stop.orderId),
         departure: dateMinutes(trip.plannedDepartureTime),
+        ...persistedEstimates(trip),
       });
       versionIds[depot] = item.planVersionId;
     }

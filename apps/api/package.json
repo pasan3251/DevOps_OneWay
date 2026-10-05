@@ -10,6 +10,7 @@
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "test": "vitest run",
+    "test:integration": "npm run build && vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "db:generate": "drizzle-kit generate",

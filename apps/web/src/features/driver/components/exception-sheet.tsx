@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X, AlertTriangle, Camera, Check } from "lucide-react";
 import type {
   StopItem,
@@ -52,6 +52,7 @@ export function ExceptionSheet({
   onClose,
   onSubmit,
 }: ExceptionSheetProps) {
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCode, setSelectedCode] =
     useState<ExceptionReasonCode>("STORE_CLOSED_UNAVAILABLE");
   const [affectedCartons, setAffectedCartons] = useState<number>(
@@ -73,30 +74,6 @@ export function ExceptionSheet({
         setPhotoPreview(event.target?.result as string);
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const triggerMockPhoto = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 400;
-    canvas.height = 300;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.fillStyle = "#3c1d14";
-      ctx.fillRect(0, 0, 400, 300);
-      ctx.fillStyle = "#ffad91";
-      ctx.font = "bold 16px sans-serif";
-      ctx.fillText("EXCEPTION EVIDENCE CAPTURE", 20, 40);
-      ctx.font = "14px sans-serif";
-      ctx.fillText(`Code: ${selectedCode}`, 20, 80);
-      ctx.fillText(`Target: ${stop?.outlet || "Transit Corridor"}`, 20, 110);
-      ctx.fillText(`Timestamp: ${new Date().toLocaleTimeString()}`, 20, 140);
-      ctx.fillStyle = "#C93800";
-      ctx.fillRect(20, 180, 140, 30);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 12px sans-serif";
-      ctx.fillText("INCIDENT LOGGED", 25, 200);
-      setPhotoPreview(canvas.toDataURL("image/png"));
     }
   };
 
@@ -123,7 +100,6 @@ export function ExceptionSheet({
           : undefined,
       photoDataUrl: photoPreview || undefined,
       reportedAt: new Date().toISOString(),
-      geoCoordinates: stop?.coordinates,
     };
 
     onSubmit(record);
@@ -239,13 +215,15 @@ export function ExceptionSheet({
 
           {/* Photo Evidence */}
           <div>
+            <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
+              id="exception-photo-input" className="hidden" onChange={handlePhotoCapture} />
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-muted-foreground">
                 Photo Evidence (Required for Claims)
               </label>
               <button
                 type="button"
-                onClick={triggerMockPhoto}
+                onClick={() => photoInputRef.current?.click()}
                 className="text-xs text-destructive font-semibold flex items-center gap-1"
               >
                 <Camera size={13} />
@@ -270,13 +248,6 @@ export function ExceptionSheet({
               </div>
             ) : (
               <div className="border border-dashed border-border rounded-lg p-2.5 text-center bg-muted/40">
-                <input
-                  type="file"
-                  accept="image/*"
-                  id="exception-photo-input"
-                  className="hidden"
-                  onChange={handlePhotoCapture}
-                />
                 <label
                   htmlFor="exception-photo-input"
                   className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 cursor-pointer py-1"

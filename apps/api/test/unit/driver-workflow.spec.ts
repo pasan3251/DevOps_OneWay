@@ -52,6 +52,20 @@ describe('Driver workflow state gates', () => {
     );
   });
 
+  it('rejects a concurrent clearance revocation without changing vehicle or order state', async () => {
+    const update = vi.fn(() => ({ set: () => ({ where: () => ({ returning: async () => [] }) }) }));
+    const transaction = { update };
+    const db = { query: {
+      drivers: { findFirst: async () => driver },
+      trips: { findFirst: async () => ({ id: 'trip-1', driverId: driver.id, vehicleId: 'vehicle-1',
+        status: 'DRIVER_READY', gateClearedAt: new Date(), gatePassToken: 'GATE-TEST',
+        driverReadyAt: new Date(), stops: [] }) },
+    }, transaction: async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction) };
+    const service = new DriverService(db as never);
+    await expect(service.departTrip('trip-1', driver.userId)).rejects.toThrow('clearance changed');
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the outlet/mall intersection and locks an early arrival', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-04T03:30:00.000Z')); // 09:00 Asia/Colombo

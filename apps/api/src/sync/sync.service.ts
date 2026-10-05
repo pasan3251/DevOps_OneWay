@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { NotificationsService } from '../communications/notifications.service';
@@ -209,7 +209,7 @@ export class SyncService {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Offline update was rejected';
       await this.persistConflict(mutation, userId, message);
-      return { clientMutationId: mutation.clientMutationId, status: 'FAILED', error: message };
+      return { clientMutationId: mutation.clientMutationId, status: error instanceof ConflictException ? 'CONFLICT' : 'FAILED', error: message };
     }
   }
 }

@@ -17,10 +17,11 @@ export function ProofOfDeliverySheet({
   onSubmit,
 }: ProofOfDeliverySheetProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const isDrawing = useRef(false);
   const [hasSignature, setHasSignature] = useState(false);
 
-  const [recipientName, setRecipientName] = useState(stop.contact.name || "");
+  const [recipientName, setRecipientName] = useState("");
   const [recipientDesignation, setRecipientDesignation] = useState(
     stop.contact.designation || "Store Receiving Manager",
   );
@@ -28,9 +29,7 @@ export function ProofOfDeliverySheet({
   const [deliveredCartons, setDeliveredCartons] = useState(stop.totalCartons);
   const [notes, setNotes] = useState("");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [selectedTags, setSelectedTags] = useState<string[]>([
-    "Count verified with store manager",
-  ]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Setup HTML5 canvas for touch signature
@@ -110,7 +109,7 @@ export function ProofOfDeliverySheet({
     );
   };
 
-  // Simulate photo capture or file upload
+  // Camera capture and file selection both preserve the actual evidence image.
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -119,32 +118,6 @@ export function ProofOfDeliverySheet({
         setPhotoPreview(event.target?.result as string);
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const triggerMockCamera = () => {
-    // Generate a clean SVG mock receipt photo data URL if no camera attached
-    const canvas = document.createElement("canvas");
-    canvas.width = 400;
-    canvas.height = 300;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.fillStyle = "#1e293b";
-      ctx.fillRect(0, 0, 400, 300);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 16px sans-serif";
-      ctx.fillText("WAYPOINT LOGISTICS - PROOF PHOTO", 20, 40);
-      ctx.font = "14px sans-serif";
-      ctx.fillText(`Outlet: ${stop.outlet}`, 20, 80);
-      ctx.fillText(`Delivered: ${deliveredCartons} Cartons`, 20, 110);
-      ctx.fillText(`Receiver: ${recipientName}`, 20, 140);
-      ctx.fillText(`Timestamp: ${new Date().toLocaleTimeString()}`, 20, 170);
-      ctx.fillStyle = "#089B8C";
-      ctx.fillRect(20, 200, 120, 30);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 12px sans-serif";
-      ctx.fillText("SEAL VERIFIED", 30, 220);
-      setPhotoPreview(canvas.toDataURL("image/png"));
     }
   };
 
@@ -388,13 +361,15 @@ export function ProofOfDeliverySheet({
               </label>
               <button
                 type="button"
-                onClick={triggerMockCamera}
+                onClick={() => photoInputRef.current?.click()}
                 className="text-xs text-primary font-semibold flex items-center gap-1"
               >
                 <Camera size={13} />
                 Snap Photo
               </button>
             </div>
+            <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
+              id="pod-photo-input" className="hidden" onChange={handlePhotoCapture} />
             {photoPreview ? (
               <div className="relative rounded-lg overflow-hidden border border-border h-24 bg-black">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -413,13 +388,6 @@ export function ProofOfDeliverySheet({
               </div>
             ) : (
               <div className="border border-dashed border-border rounded-lg p-2.5 text-center bg-muted/40">
-                <input
-                  type="file"
-                  accept="image/*"
-                  id="pod-photo-input"
-                  className="hidden"
-                  onChange={handlePhotoCapture}
-                />
                 <label
                   htmlFor="pod-photo-input"
                   className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 cursor-pointer py-1"
@@ -435,7 +403,7 @@ export function ProofOfDeliverySheet({
             <div className="p-2.5 rounded-lg bg-muted border border-border text-foreground text-xs flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5 text-muted-foreground" />
               <span>
-                Discrepancy notice will be automatically dispatched to Peliyagoda Planning Desk and Store Portal upon sync.
+                Dispatch and the receiving store will be notified when this handover record is synchronized.
               </span>
             </div>
           )}

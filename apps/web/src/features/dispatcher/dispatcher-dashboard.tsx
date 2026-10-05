@@ -48,7 +48,7 @@ import {
 import { WaypointLogo } from "@/components/waypoint-logo";
 import { authService, type Session } from "@/features/auth/auth-service";
 import {
-  DEMO_DATE,
+  currentOperatingDate,
   deferralReasons,
   formatTime,
   fuelLitres,
@@ -123,7 +123,7 @@ export function DispatcherDashboard() {
   const [session, setSession] = useState<Session | null>(null);
   const [plan, setPlan] = useState<Plan>(initialPlan);
   const [depot, setDepot] = useState<Depot>("Peliyagoda");
-  const [date, setDate] = useState(DEMO_DATE);
+  const [date, setDate] = useState(currentOperatingDate);
   const [view, setView] = useState<View>("overview");
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [routeMode, setRouteMode] = useState<RouteMode>("allocate");
@@ -202,7 +202,7 @@ export function DispatcherDashboard() {
         setWorkspace(workspaceService.load());
       } catch {
         setFailure(
-          "Your saved calendar, chat and appearance could not be read. They will be replaced only after a successful local save.",
+            "Your saved calendar and appearance could not be read. They will be replaced only after a successful local save.",
         );
       }
       try {
@@ -399,7 +399,7 @@ export function DispatcherDashboard() {
       note.trim().length < 20
     ) {
       setDeferralError(
-        "A repeated deferral needs a justification of at least 20 characters (demo team policy).",
+        "A repeated deferral needs a justification of at least 20 characters.",
       );
       return;
     }
@@ -421,7 +421,7 @@ export function DispatcherDashboard() {
       router.replace("/login");
     } catch {
       setFailure(
-        "Couldn’t clear your demo session. Allow site storage and retry sign-out.",
+        "Couldn’t clear your session. Allow site storage and retry sign-out.",
       );
     }
   }
@@ -590,7 +590,7 @@ export function DispatcherDashboard() {
           <span className="user-avatar">DS</span>
           <div>
             <strong>{session.name}</strong>
-            <span>Dispatcher · Demo</span>
+            <span>Dispatcher</span>
           </div>
           <button aria-label="Sign out" onClick={signOut}>
             <LogOut size={18} aria-hidden="true" />
@@ -621,16 +621,11 @@ export function DispatcherDashboard() {
             <SharedAccountTools session={session} />
             <WorkspaceTools
               state={workspace}
-              plan={plan}
-              depot={depot}
-              name={session.name}
               onSave={saveWorkspace}
-              onNavigate={navigateView}
-              onSignOut={signOut}
             />
             <button
               className="dispatch-icon-button"
-              aria-label="About this demo"
+              aria-label="Workspace guide"
               onClick={() => setModal("help")}
             >
               <CircleHelp size={20} aria-hidden="true" />
@@ -836,11 +831,9 @@ export function DispatcherDashboard() {
               plan={plan}
               depot={depot}
               onOrder={(id) => {
-                setDate(DEMO_DATE);
                 inspectOrder(id);
               }}
               onRoute={(id) => {
-                setDate(DEMO_DATE);
                 openRoute(id);
               }}
             />
@@ -853,7 +846,6 @@ export function DispatcherDashboard() {
               onSave={saveWorkspace}
               onDate={setDate}
               onRoute={(id) => {
-                setDate(DEMO_DATE);
                 openRoute(id);
               }}
             />
@@ -896,8 +888,6 @@ export function DispatcherDashboard() {
                     setTripId(id);
                     navigateRouteMode("assign");
                   }}
-                  state={workspace}
-                  onSave={saveWorkspace}
                 />
               ) : (
                 <>
@@ -1251,7 +1241,7 @@ export function DispatcherDashboard() {
                               Suggest window order
                             </button>
                             <p className="workspace-note">
-                              Demo suggestion sorts by window close and
+                              This suggestion sorts by window close and
                               validates the result. This is not road
                               optimization.
                             </p>
@@ -1419,7 +1409,7 @@ export function DispatcherDashboard() {
                             ) : (
                               <p>
                                 Capacity, temperature, access and schedule
-                                checks pass for this demo trip.
+                                checks pass for this trip.
                               </p>
                             )}
                           </div>
@@ -1428,7 +1418,7 @@ export function DispatcherDashboard() {
                               {tripMinutes(activeTrip)} min allocation budget
                             </span>
                             <span>
-                              {fuelLitres(activeTrip).toFixed(1)} L demo fuel
+                              {fuelLitres(activeTrip).toFixed(1)} L estimated fuel
                             </span>
                           </div>
                         </>
@@ -1498,7 +1488,7 @@ export function DispatcherDashboard() {
                   ? "Record a deferral"
                   : modal === "publish"
                     ? "Review the daily plan"
-                    : "About this demo"}
+                    : "Dispatcher workspace guide"}
             </DialogTitle>
             <DialogDescription>
               {modal === "trip"
@@ -1506,8 +1496,8 @@ export function DispatcherDashboard() {
                 : modal === "defer"
                   ? `${selectedOrders.length} selected order(s). Record why they cannot be served today.`
                   : modal === "publish"
-                    ? `${depot} · 3 October 2026 · Asia/Colombo`
-                    : "Frontend planning, ready for backend integration."}
+                    ? `${depot} · ${date} · Asia/Colombo`
+                    : "Plan, publish and monitor each delivery run."}
             </DialogDescription>
           </DialogHeader>
           {failure && (
@@ -1613,7 +1603,7 @@ export function DispatcherDashboard() {
               {selectedOrders.some((order) => order.carryOver) && (
                 <p className="dispatch-dialog-warning">
                   This includes a carry-over order. Explain why another deferral
-                  is necessary (at least 20 characters, demo team policy).
+                  is necessary (at least 20 characters).
                 </p>
               )}
               {deferralError && (
@@ -1645,7 +1635,7 @@ export function DispatcherDashboard() {
               {canPublish ? (
                 <p className="review-ready">
                   <CheckCircle2 size={19} aria-hidden="true" />
-                  Every order is accounted for and all demo trip checks pass.
+                  Every order is accounted for and local trip checks pass. The server validates publication.
                 </p>
               ) : (
                 <div className="dispatch-dialog-warning">
@@ -1685,21 +1675,18 @@ export function DispatcherDashboard() {
           {modal === "help" && (
             <div className="demo-help">
               <p>
-                These fixtures are independent examples, not the competition
-                datasets. Orders, capacities, windows and fuel figures are
-                synthetic.
+                Review the selected operating day, assign whole orders to compatible vehicles,
+                and record a reason for every deferral before publishing the plan.
               </p>
               <p>
-                Manual checks cover capacity, refrigeration, access, depot,
-                brand/district, daily budgets, fuel and duplicate allocation.
-                Travel times are illustrative. Fuel assumes 0.5 km per travel
-                minute plus a 20 km return; consecutive trips reserve a demo
-                30-minute return/reload allowance.
+                The server checks capacity, refrigeration, access, depot, brand and district,
+                delivery windows, time budgets, fuel and duplicate allocation. Saved arrival
+                and fuel estimates are calculated by the server.
               </p>
               <p>
-                Local plan changes survive reload. Real authentication,
-                authoritative validation, synchronized manifests and delivery
-                monitoring will be connected in the backend phase.
+                Publication releases loading manifests and driver routes. Use a controlled
+                revision to change a published plan. Track delivery progress to review loading,
+                driver and receiving confirmations.
               </p>
             </div>
           )}

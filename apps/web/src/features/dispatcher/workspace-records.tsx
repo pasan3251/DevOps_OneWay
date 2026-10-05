@@ -147,7 +147,6 @@ export function DeferralRecords({
                   <th>Outlet</th>
                   <th>Priority</th>
                   <th>Reason</th>
-                  <th>Deferred by</th>
                   <th>Details</th>
                 </tr>
               </thead>
@@ -160,8 +159,8 @@ export function DeferralRecords({
                     }
                   >
                     <td>
-                      <strong>DEF-{order.id.split("-")[1]}</strong>
-                      <small>{order.id}</small>
+                      <strong>{order.orderNumber}</strong>
+                      <small>Order deferral</small>
                     </td>
                     <td>
                       {order.outlet}
@@ -169,9 +168,6 @@ export function DeferralRecords({
                     </td>
                     <td>{order.carryOver ? "Repeated" : "Standard"}</td>
                     <td>{entry.reason}</td>
-                    <td>
-                      Dispatcher<small>Local demo</small>
-                    </td>
                     <td>
                       <button
                         className="dispatch-text-button"
@@ -310,10 +306,6 @@ export function DeferralRecords({
                       <div>
                         <dt>Reason</dt>
                         <dd>{detail.entry.reason}</dd>
-                      </div>
-                      <div>
-                        <dt>Recorded by</dt>
-                        <dd>Dispatcher · local demo</dd>
                       </div>
                       <div>
                         <dt>Last served</dt>
@@ -457,9 +449,8 @@ export function OutletDirectory({
             }))}
           />
           <p className="workspace-note">
-            {filtered.length} sample outlets in {depot}. The directory uses the
-            supplied frontend scenario, not the full network. Allocation status
-            refers to the 3 October 2026 demo plan.
+            {filtered.length} order-backed outlet entries in {depot} for the selected operating day.
+            Allocation status reflects the current server plan, not the full outlet network.
           </p>
         </div>
       </aside>
@@ -498,7 +489,7 @@ export function OutletDirectory({
         </div>
         <div className="workspace-table-scroll">
           <table className="workspace-table">
-            <caption className="sr-only">Sample outlet requirements</caption>
+            <caption className="sr-only">Outlet requirements for the selected orders</caption>
             <thead>
               <tr>
                 <th>Outlet / district</th>

@@ -25,7 +25,6 @@ import {
 import { WaypointLogo } from "@/components/waypoint-logo";
 import { authService, type Session } from "@/features/auth/auth-service";
 import {
-  DEMO_DATE,
   initialPlan,
   orders,
   planningService,
@@ -81,7 +80,7 @@ export function LoaderDashboard() {
   const [depot, setDepot] = useState<Depot>("Peliyagoda");
   const [view, setView] = useState<LoaderView>("overview");
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [selectedTripId, setSelectedTripId] = useState<string>("TRIP-01");
+  const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [clearedTrips, setClearedTrips] = useState<Record<string, ClearanceRecord>>({});
   const [verifications, setVerifications] = useState<Record<string, ManifestVerification>>({});
@@ -339,19 +338,11 @@ export function LoaderDashboard() {
             <SharedAccountTools session={session} />
             <WorkspaceTools
               state={workspace}
-              plan={plan}
-              depot={depot}
-              name={session.name}
               onSave={saveWorkspace}
-              onNavigate={(dest) => {
-                if (dest === "chat") setView("chat");
-                else setView("overview");
-              }}
-              onSignOut={signOut}
             />
             <button
               className="dispatch-icon-button"
-              aria-label="About this demo"
+              aria-label="Workspace guide"
               onClick={() => setModal("help")}
             >
               <CircleHelp size={20} aria-hidden="true" />
@@ -411,8 +402,8 @@ export function LoaderDashboard() {
               </label>
 
               <label>
-                Operating date
-                <input type="date" value={DEMO_DATE} readOnly disabled />
+                Selected trip date
+                <input type="date" value={plan.trips.find((trip) => trip.id === selectedTripId)?.operatingDate ?? ""} readOnly disabled />
               </label>
             </div>
           </div>

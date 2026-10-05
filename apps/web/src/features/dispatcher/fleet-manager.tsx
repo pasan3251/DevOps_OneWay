@@ -480,7 +480,7 @@ export function FleetManager({
                             {formatTime(
                               stopTimes(trip).at(-1)?.end ?? trip.departure,
                             )}
-                            <small>Demo service finish</small>
+                            <small>Planned service finish</small>
                           </td>
                           <td>
                             <span

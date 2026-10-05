@@ -3,193 +3,113 @@
 import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { orders, type Depot, type Trip } from "./planning";
+import { orders, vehicles, type Depot, type Trip } from "./planning";
 
-// Illustrative town-level seed positions, never organizer or real outlet addresses.
-export const demoPositions: Record<string, [number, number]> = {
-  Peliyagoda: [6.964, 79.889],
-  Kandy: [7.291, 80.638],
-  "ORD-1041": [6.915, 79.878],
-  "ORD-1042": [6.869, 79.89],
-  "ORD-1043": [6.874, 79.861],
-  "ORD-1044": [6.899, 79.854],
-  "ORD-1045": [6.851, 79.865],
-  "ORD-1046": [7.208, 79.84],
-  "ORD-2041": [7.324, 80.625],
-  "ORD-2042": [7.263, 80.596],
-};
+type Coordinates = [number, number];
 type Props = {
   depot: Depot;
   trips: Trip[];
   focusedOrder?: string | null;
   selectedTrip?: string;
+  currentLocation?: { coordinates: Coordinates; recordedAt: string } | null;
   onTrip?: (id: string) => void;
   onOrder?: (id: string) => void;
 };
-export function RouteMap({
-  depot,
-  trips,
-  focusedOrder,
-  selectedTrip,
-  onTrip,
-  onOrder,
-}: Props) {
+
+function validCoordinates(value?: Coordinates): value is Coordinates {
+  return !!value && Number.isFinite(value[0]) && Number.isFinite(value[1]) &&
+    Math.abs(value[0]) <= 90 && Math.abs(value[1]) <= 180;
+}
+
+export function RouteMap({ depot, trips, focusedOrder, selectedTrip, currentLocation, onTrip, onOrder }: Props) {
   const element = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const callbacks = useRef({ onTrip, onOrder });
-  useEffect(() => {
-    callbacks.current = { onTrip, onOrder };
-  }, [onTrip, onOrder]);
+  useEffect(() => { callbacks.current = { onTrip, onOrder }; }, [onTrip, onOrder]);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
-  const signature = JSON.stringify({
-    depot,
-    trips: trips.map((t) => ({
-      id: t.id,
-      vehicleId: t.vehicleId,
-      orderIds: t.orderIds,
-    })),
-    focusedOrder,
-    selectedTrip,
-  });
+  const depotCoordinates = vehicles.find((vehicle) => vehicle.depot === depot)?.depotCoordinates;
+  const routes = trips.map((trip) => ({
+    id: trip.id, vehicleId: trip.vehicleId,
+    stops: trip.orderIds.flatMap((id) => {
+      const order = orders.find((item) => item.id === id);
+      return order && validCoordinates(order.coordinates) ? [{ id, label: order.outlet, coordinates: order.coordinates }] : [];
+    }),
+  }));
+  const signature = JSON.stringify({ depot, depotCoordinates, routes, focusedOrder, selectedTrip, currentLocation });
   useEffect(() => {
     let disposed = false;
     let observer: ResizeObserver | undefined;
-    import("leaflet")
-      .then((L) => {
-        if (disposed || !element.current) return;
-        setError(false);
-        const data: {
-          depot: Depot;
-          trips: Trip[];
-          focusedOrder?: string;
-          selectedTrip?: string;
-        } = JSON.parse(signature);
-        const map = L.map(element.current, {
-          scrollWheelZoom: false,
-          zoomControl: true,
-        }).setView(demoPositions[data.depot], 11);
-        mapRef.current = map;
-        const tiles = L.tileLayer(
-          process.env.NEXT_PUBLIC_MAP_TILE_URL ||
-            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-          {
-            maxZoom: 18,
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          },
-        );
-        tiles.on("tileerror", () => {
-          if (!disposed) setError(true);
-        });
-        tiles.addTo(map);
-        const pin = (text: string, active = false) =>
-          L.divIcon({
-            className: "waypoint-map-pin",
-            html: `<span class="${active ? "active" : ""}">${text}</span>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-          });
-        const depotMarker = L.marker(demoPositions[data.depot], {
-          icon: pin("D", true),
-          title: `${data.depot} demo depot`,
-        })
-          .addTo(map)
-          .bindTooltip(`${data.depot} · illustrative depot`);
-        const points: [number, number][] = [demoPositions[data.depot]];
-        data.trips.forEach((trip, index) => {
-          const route = [
-            demoPositions[data.depot],
-            ...trip.orderIds.map((id) => demoPositions[id]).filter(Boolean),
-          ];
-          L.polyline(route, {
-            color: trip.id === data.selectedTrip ? "#171717" : "#737373",
-            weight: trip.id === data.selectedTrip ? 5 : 3,
-            dashArray: "8 6",
-          })
-            .addTo(map)
-            .bindTooltip(`${trip.id} · ${trip.vehicleId}`)
-            .on("click", () => callbacks.current.onTrip?.(trip.id));
-          trip.orderIds.forEach((id, stop) => {
-            const order = orders.find((o) => o.id === id);
-            if (!order || !demoPositions[id]) return;
-            points.push(demoPositions[id]);
-            L.marker(demoPositions[id], {
-              icon: pin(String(stop + 1), id === data.focusedOrder),
-              title: `${order.outlet} · ${trip.id}`,
-            })
-              .addTo(map)
-              .bindTooltip(order.outlet)
-              .on("click", () => callbacks.current.onOrder?.(id));
-          });
-          if (route.length > 1)
-            L.marker([(route[0][0] + route[1][0]) / 2, (route[0][1] + route[1][1]) / 2], {
-              icon: pin(`T${index + 1}`, trip.id === data.selectedTrip),
-              title: `Select ${trip.id}`,
-            })
-              .addTo(map)
-              .bindTooltip(`${trip.vehicleId} · ${trip.id}`)
-              .on("click", () => callbacks.current.onTrip?.(trip.id));
-        });
-        if (data.focusedOrder && demoPositions[data.focusedOrder]) {
-          const point = demoPositions[data.focusedOrder];
-          L.marker(point, { icon: pin("•", true), title: "Selected outlet" })
-            .addTo(map)
-            .bindTooltip(
-              orders.find((o) => o.id === data.focusedOrder)?.outlet ??
-                "Selected outlet",
-            )
-            .openTooltip();
-          map.setView(point, 13);
-        } else if (points.length > 1)
-          map.fitBounds(L.latLngBounds(points), {
-            padding: [35, 35],
-            maxZoom: 13,
-          });
-        else depotMarker.openTooltip();
-        observer = new ResizeObserver(() => map.invalidateSize());
-        observer.observe(element.current);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!disposed) {
-          setError(true);
-          setLoading(false);
-        }
+    import("leaflet").then((L) => {
+      if (disposed || !element.current) return;
+      setError(false);
+      const data: {
+        depot: Depot; depotCoordinates?: Coordinates; routes: typeof routes;
+        focusedOrder?: string; selectedTrip?: string; currentLocation?: Props["currentLocation"];
+      } = JSON.parse(signature);
+      if (!validCoordinates(data.depotCoordinates)) { setLoading(false); return; }
+      const map = L.map(element.current, { scrollWheelZoom: false, zoomControl: true })
+        .setView(data.depotCoordinates, 11);
+      mapRef.current = map;
+      const tiles = L.tileLayer(process.env.NEXT_PUBLIC_MAP_TILE_URL ||
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 18,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       });
-    return () => {
-      disposed = true;
-      observer?.disconnect();
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
+      tiles.on("tileerror", () => { if (!disposed) setError(true); });
+      tiles.addTo(map);
+      const pin = (text: string, active = false) => L.divIcon({
+        className: "waypoint-map-pin",
+        html: `<span class="${active ? "active" : ""}">${text}</span>`,
+        iconSize: [28, 28], iconAnchor: [14, 14],
+      });
+      const label = (text: string) => { const node = document.createElement("span"); node.textContent = text; return node; };
+      const depotMarker = L.marker(data.depotCoordinates, { icon: pin("D", true), title: `${data.depot} depot` })
+        .addTo(map).bindTooltip(label(`${data.depot} depot`));
+      const points: Coordinates[] = [data.depotCoordinates];
+      for (const route of data.routes) {
+        const path: Coordinates[] = [data.depotCoordinates, ...route.stops.map((stop) => stop.coordinates), data.depotCoordinates];
+        if (route.stops.length) L.polyline(path, {
+          color: route.id === data.selectedTrip ? "#171717" : "#737373",
+          weight: route.id === data.selectedTrip ? 5 : 3, dashArray: "8 6",
+        }).addTo(map).bindTooltip(label(`${route.id} · ${route.vehicleId}`))
+          .on("click", () => callbacks.current.onTrip?.(route.id));
+        route.stops.forEach((stop, index) => {
+          points.push(stop.coordinates);
+          L.marker(stop.coordinates, { icon: pin(String(index + 1), stop.id === data.focusedOrder), title: stop.label })
+            .addTo(map).bindTooltip(label(stop.label)).on("click", () => callbacks.current.onOrder?.(stop.id));
+        });
+      }
+      if (data.currentLocation && validCoordinates(data.currentLocation.coordinates)) {
+        points.push(data.currentLocation.coordinates);
+        L.marker(data.currentLocation.coordinates, { icon: pin("V", true), title: "Last recorded vehicle location" })
+          .addTo(map).bindTooltip(label(`Vehicle location recorded ${new Date(data.currentLocation.recordedAt).toLocaleString()}`));
+      }
+      const focused = data.routes.flatMap((route) => route.stops).find((stop) => stop.id === data.focusedOrder);
+      if (focused) {
+        L.marker(focused.coordinates, { icon: pin("•", true), title: "Selected outlet" })
+          .addTo(map).bindTooltip(label(focused.label)).openTooltip();
+        map.setView(focused.coordinates, 13);
+      } else if (points.length > 1) map.fitBounds(L.latLngBounds(points), { padding: [35, 35], maxZoom: 13 });
+      else depotMarker.openTooltip();
+      observer = new ResizeObserver(() => map.invalidateSize());
+      observer.observe(element.current);
+      setLoading(false);
+    }).catch(() => { if (!disposed) { setError(true); setLoading(false); } });
+    return () => { disposed = true; observer?.disconnect(); mapRef.current?.remove(); mapRef.current = null; };
   }, [signature]);
-  return (
-    <section className="route-map-panel" aria-label="Illustrative route map">
-      <div className="route-map-canvas" ref={element} />
-      {loading && (
-        <p className="map-loading" role="status">
-          Loading route preview…
-        </p>
-      )}
-      <p className="route-map-note">
-        Illustrative pins · lines show stop sequence, not road directions.
-      </p>
-      {error && (
-        <p className="map-warning" role="status">
-          Basemap unavailable. Route pins remain usable; check your connection.
-        </p>
-      )}
-      <div className="map-location-links">
-        <button
-          onClick={() => {
-            mapRef.current?.setView(demoPositions[depot], 12);
-          }}
-        >
-          Focus {depot} depot
-        </button>
-        {focusedOrder && <span>Selected: {focusedOrder}</span>}
-      </div>
-    </section>
-  );
+
+  return <section className="route-map-panel" aria-label="Assigned route map">
+    <div className="route-map-canvas" ref={element} />
+    {loading && <p className="map-loading" role="status">Loading route map…</p>}
+    {!validCoordinates(depotCoordinates) && <p className="map-loading" role="status">Depot coordinates are unavailable.</p>}
+    <p className="route-map-note">Registered outlet locations · lines show stop sequence, not road directions.</p>
+    {error && <p className="map-warning" role="status">Map unavailable. Check your connection; stop details remain available.</p>}
+    <div className="map-location-links">
+      <button disabled={!validCoordinates(depotCoordinates)} onClick={() => {
+        if (validCoordinates(depotCoordinates)) mapRef.current?.setView(depotCoordinates, 12);
+      }}>Focus {depot} depot</button>
+      {focusedOrder && <span>Selected outlet</span>}
+    </div>
+  </section>;
 }

@@ -50,7 +50,7 @@ async function seed() {
         province: 'Western Province',
         latitude: '6.9667000',
         longitude: '79.9167000',
-        operatingHoursOpen: '06:00',
+        operatingHoursOpen: '03:30',
         operatingHoursClose: '22:00',
       },
       {
@@ -59,7 +59,7 @@ async function seed() {
         province: 'Central Province',
         latitude: '7.2906000',
         longitude: '80.6337000',
-        operatingHoursOpen: '06:00',
+        operatingHoursOpen: '03:30',
         operatingHoursClose: '22:00',
       },
     ]).returning();
@@ -77,8 +77,8 @@ async function seed() {
         longitude: '79.9180000',
         address: '14 Negombo Rd, Peliyagoda',
         contactPhone: '+94 11 291 0001',
-        windowStart: '08:00',
-        windowEnd: '12:00',
+        windowStart: '05:00',
+        windowEnd: '08:00',
         isVanOnly: false,
       },
       {
@@ -91,8 +91,8 @@ async function seed() {
         longitude: '79.8358000',
         address: '88 Main Street, Negombo',
         contactPhone: '+94 31 222 0002',
-        windowStart: '09:00',
-        windowEnd: '13:00',
+        windowStart: '05:00',
+        windowEnd: '08:00',
         isVanOnly: true, // Narrow street
       },
       {
@@ -105,8 +105,8 @@ async function seed() {
         longitude: '79.8660000',
         address: '42 Ward Place, Colombo 07',
         contactPhone: '+94 11 269 0003',
-        windowStart: '08:00',
-        windowEnd: '11:00',
+        windowStart: '05:00',
+        windowEnd: '08:00',
         isVanOnly: false,
       },
       {
@@ -119,8 +119,8 @@ async function seed() {
         longitude: '79.8640000',
         address: '120 Marine Drive, Dehiwala',
         contactPhone: '+94 11 271 0004',
-        windowStart: '14:00',
-        windowEnd: '18:00',
+        windowStart: '05:00',
+        windowEnd: '08:00',
         isVanOnly: false,
       },
 
@@ -195,8 +195,8 @@ async function seed() {
         longitude: '80.6380000',
         address: '32 Dalada Veediya, Kandy',
         contactPhone: '+94 81 223 3001',
-        windowStart: '08:00',
-        windowEnd: '12:00',
+        windowStart: '05:00',
+        windowEnd: '08:00',
         isVanOnly: true, // Heritage zone van access
       },
       {
@@ -209,8 +209,8 @@ async function seed() {
         longitude: '80.5980000',
         address: '100 Kandy Rd, Peradeniya',
         contactPhone: '+94 81 238 3002',
-        windowStart: '09:00',
-        windowEnd: '14:00',
+        windowStart: '05:00',
+        windowEnd: '08:00',
         isVanOnly: false,
       },
     ]).returning();
@@ -285,6 +285,8 @@ async function seed() {
         refrigerationType: 'reefer',
         maxWeightKg: '5000.00',
         maxVolumeM3: '22.00',
+        fuelEfficiencyKmPerL: '4.50',
+        weeklyFuelQuotaL: '250.00',
         status: 'available',
       },
       {
@@ -295,6 +297,8 @@ async function seed() {
         refrigerationType: 'reefer',
         maxWeightKg: '1500.00',
         maxVolumeM3: '8.50',
+        fuelEfficiencyKmPerL: '7.00',
+        weeklyFuelQuotaL: '180.00',
         status: 'available',
       },
       {
@@ -305,6 +309,8 @@ async function seed() {
         refrigerationType: 'ambient',
         maxWeightKg: '6000.00',
         maxVolumeM3: '26.00',
+        fuelEfficiencyKmPerL: '5.00',
+        weeklyFuelQuotaL: '250.00',
         status: 'available',
       },
       {
@@ -315,6 +321,8 @@ async function seed() {
         refrigerationType: 'ambient',
         maxWeightKg: '1800.00',
         maxVolumeM3: '9.00',
+        fuelEfficiencyKmPerL: '8.00',
+        weeklyFuelQuotaL: '180.00',
         status: 'available',
       },
       // Kandy Vehicles
@@ -326,6 +334,8 @@ async function seed() {
         refrigerationType: 'reefer',
         maxWeightKg: '1500.00',
         maxVolumeM3: '8.50',
+        fuelEfficiencyKmPerL: '7.00',
+        weeklyFuelQuotaL: '180.00',
         status: 'available',
       },
     ]).returning();
@@ -423,9 +433,9 @@ async function seed() {
     ]).returning();
 
     console.log('[Seed] Inserting Sample Orders...');
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo' }).format(new Date());
 
-    const [orderFreshAmb, orderFreshChl] = await db.insert(schema.orders).values([
+    const [orderFreshAmb, orderFreshChl, orderNegomboChl] = await db.insert(schema.orders).values([
       {
         orderNumber: `ORD-${today}-FR-001`,
         outletId: insertedOutlets[0].id,
@@ -433,8 +443,8 @@ async function seed() {
         tempRequirement: 'ambient',
         orderDate: today,
         status: 'ORDER_RECORDED',
-        totalWeightKg: '120.00',
-        totalVolumeM3: '0.25',
+        totalWeightKg: '60.90',
+        totalVolumeM3: '0.0990',
         totalItemsCount: 30,
         createdBy: userManagerFresh.id,
       },
@@ -445,8 +455,8 @@ async function seed() {
         tempRequirement: 'chilled',
         orderDate: today,
         status: 'ORDER_RECORDED',
-        totalWeightKg: '85.00',
-        totalVolumeM3: '0.18',
+        totalWeightKg: '39.90',
+        totalVolumeM3: '0.0585',
         totalItemsCount: 50,
         createdBy: userManagerFresh.id,
       },
@@ -457,8 +467,8 @@ async function seed() {
         tempRequirement: 'chilled',
         orderDate: today,
         status: 'ORDER_RECORDED',
-        totalWeightKg: '140.00',
-        totalVolumeM3: '0.32',
+        totalWeightKg: '68.25',
+        totalVolumeM3: '0.0975',
         totalItemsCount: 65,
       },
     ]).returning();
@@ -496,6 +506,14 @@ async function seed() {
         unitWeightKg: '0.210',
         unitVolumeM3: '0.0004',
         unitPrice: '780.00',
+      },
+      {
+        orderId: orderNegomboChl.id,
+        productId: insertedProducts[2].id,
+        quantityRequested: 65,
+        unitWeightKg: '1.050',
+        unitVolumeM3: '0.0015',
+        unitPrice: '520.00',
       },
     ]);
 

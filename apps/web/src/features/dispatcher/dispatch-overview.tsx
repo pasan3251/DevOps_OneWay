@@ -164,7 +164,7 @@ function Calendar({
           );
         })}
       </div>
-      <p>Demo scenario: 3 October 2026</p>
+      <p>Planning day · Asia/Colombo</p>
     </section>
   );
 }

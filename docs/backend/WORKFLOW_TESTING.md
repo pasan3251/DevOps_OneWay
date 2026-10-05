@@ -84,7 +84,21 @@ Expected authoritative state: a correct handover creates a `CONFIRMED` receipt a
 ## Automated checks
 
 - `npm run test:api` validates domain rules, authorization-sensitive service behavior, API contracts, and the cross-role workflow surface.
+- `npm --prefix apps/api run test:integration` exercises the production Nest application against a disposable PostgreSQL database using real authenticated HTTP requests and persisted records.
 - `npm run typecheck` validates the web application and generated Next.js route types.
 - `npm run build` builds both the web and API production bundles.
 
 The workflow contract test is not a substitute for the browser/database walkthrough above. It intentionally fails if a required cross-role endpoint or lifecycle state is removed or renamed.
+
+### Database-backed lifecycle suite
+
+Provide `TEST_DATABASE_URL` for a disposable local PostgreSQL database named exactly `waypoint_integration_test`. The suite refuses other database names and nonlocal hosts, applies current migrations, and creates uniquely named test records. It never uses the normal `DATABASE_URL` for test data.
+
+```powershell
+$env:TEST_DATABASE_URL = 'postgresql://waypoint_test:waypoint_test_only@127.0.0.1:55432/waypoint_integration_test'
+npm --prefix apps/api run test:integration
+```
+
+The suite covers the four-role happy path, early receiving-window holds, loading damage/resolution, plan revision invalidation and re-verification, offline chronological replay and duplicate detection, persisted conflicts, failed delivery, receiving discrepancy, shared messages/profile and authorization. Expected error logs in negative scenarios are intentional assertions of blocked transitions.
+
+These tests do not claim browser/device-camera/GPS verification or full Compose startup validation. Continue the real multi-role walkthrough after the automated suite passes.

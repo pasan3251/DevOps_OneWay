@@ -630,11 +630,27 @@ export class DispatchService {
       where: eq(schema.trips.planVersionId, versionId),
       with: { stops: true },
     });
+    const revisableStatuses: schema.Trip['status'][] = ['PLANNED', 'LOCKED', 'LOADING', 'MANIFEST_ISSUED', 'CLEARED', 'DRIVER_READY'];
+    if (sourceTrips.some((trip) => !revisableStatuses.includes(trip.status))) {
+      throw new ConflictException('A plan cannot be cloned for revision once a trip has departed or completed');
+    }
     const sourcePlan = await this.db.query.deliveryPlans.findFirst({ where: eq(schema.deliveryPlans.id, source.planId) });
     if (!sourcePlan) throw new NotFoundException('Delivery plan not found');
     const nextNumber = (existing[0]?.versionNumber ?? source.versionNumber) + 1;
     const now = new Date();
     const result = await this.db.transaction(async (tx) => {
+      if (sourceTrips.length) {
+        const invalidated = await tx.update(schema.trips).set({
+          status: 'LOCKED', gatePassToken: null, gateClearedAt: null, gateClearedBy: null,
+          driverReadyAt: null, driverChecklist: null, updatedAt: now,
+        }).where(and(
+          eq(schema.trips.planVersionId, source.id),
+          inArray(schema.trips.status, revisableStatuses),
+        )).returning({ id: schema.trips.id });
+        if (invalidated.length !== sourceTrips.length) {
+          throw new ConflictException('Trip execution changed while the revision was being created. Refresh the plan.');
+        }
+      }
       const [revision] = await tx.insert(schema.planVersions).values({
         planId: source.planId,
         versionNumber: nextNumber,
@@ -773,6 +789,9 @@ export class DispatchService {
   }
 
   async listTrips(filter: TripFilterDto, user?: RequestUser) {
+    if (user?.role === 'loader' && !user.depotId) {
+      throw new ForbiddenException('Loaders require an assigned depot to view trips');
+    }
     const conditions: SQL<unknown>[] = [];
     if (filter.operatingDate) conditions.push(eq(schema.trips.operatingDate, filter.operatingDate));
     if (filter.brand) conditions.push(eq(schema.trips.brand, filter.brand));
@@ -813,11 +832,13 @@ export class DispatchService {
         vehicle: true,
         driver: { with: { user: true } },
         depot: true,
+        loadingManifests: { with: { exceptions: true } },
         stops: {
           with: {
             outlet: true,
             order: { with: { items: { with: { product: true } } } },
             proofOfDelivery: true,
+            receipt: true,
           },
         },
       },

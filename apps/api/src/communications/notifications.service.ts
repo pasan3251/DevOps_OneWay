@@ -51,10 +51,19 @@ export class NotificationsService {
   async usersForRoles(roles: Array<'admin' | 'dispatcher' | 'store_manager' | 'loader' | 'driver'>, scope?: { depotId?: string; outletIds?: string[] }) {
     const rows = await this.db.query.users.findMany({
       where: and(eq(schema.users.isActive, true), inArray(schema.users.role, roles)),
+      with: { outlet: true },
     });
     return rows
-      .filter((user) => !scope?.depotId || user.role === 'admin' || user.depotId === scope.depotId)
-      .filter((user) => !scope?.outletIds?.length || user.role !== 'store_manager' || Boolean(user.outletId && scope.outletIds.includes(user.outletId)))
+      .filter((user) => {
+        // Central dispatch covers both depots. Store accounts are outlet-scoped,
+        // not warehouse-depot accounts; an empty outlet list must not broadcast.
+        if (user.role === 'admin' || user.role === 'dispatcher') return true;
+        if (user.role === 'store_manager') {
+          if (scope?.outletIds !== undefined) return Boolean(user.outletId && scope.outletIds.includes(user.outletId));
+          return !scope?.depotId || user.outlet?.depotId === scope.depotId;
+        }
+        return !scope?.depotId || user.depotId === scope.depotId;
+      })
       .map((user) => user.id);
   }
 

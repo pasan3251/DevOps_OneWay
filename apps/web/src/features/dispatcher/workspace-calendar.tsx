@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  DEMO_DATE,
+  currentOperatingDate,
   formatTime,
   orders,
   validateTrip,
@@ -48,12 +48,12 @@ export function WorkspaceCalendar({
   onRoute: (id: string) => void;
 }) {
   const [month, setMonth] = useState(
-    (validDate(date) ? date : DEMO_DATE).slice(0, 7),
+    (validDate(date) ? date : currentOperatingDate()).slice(0, 7),
   );
   const [view, setView] = useState("Month");
   const [dialog, setDialog] = useState(false);
   const [title, setTitle] = useState("");
-  const [eventDate, setEventDate] = useState(date || DEMO_DATE);
+  const [eventDate, setEventDate] = useState(date || currentOperatingDate());
   const [time, setTime] = useState("08:00");
   const [kind, setKind] = useState<CalendarEvent["kind"]>("Planning");
   const [error, setError] = useState("");
@@ -76,16 +76,12 @@ export function WorkspaceCalendar({
     .map((t) => ({
       id: t.id,
       title: `${t.vehicleId} · ${t.orderIds.length} stops`,
-      date: DEMO_DATE,
+      date: t.operatingDate ?? date,
       time: formatTime(t.departure),
       kind: "Route",
     }));
-  const selectedOrders =
-    date === DEMO_DATE ? orders.filter((order) => order.depot === depot) : [];
-  const selectedTrips =
-    date === DEMO_DATE
-      ? plan.trips.filter((trip) => trip.depot === depot)
-      : [];
+  const selectedOrders = orders.filter((order) => order.depot === depot);
+  const selectedTrips = plan.trips.filter((trip) => trip.depot === depot);
   const assignedVehicles = new Set(selectedTrips.map((trip) => trip.vehicleId));
   const availableVehicles = vehicles.filter(
     (vehicle) =>
@@ -156,7 +152,7 @@ export function WorkspaceCalendar({
             onClick={() => {
               setEditingId(null);
               setTitle("");
-              setEventDate(date || DEMO_DATE);
+              setEventDate(date || currentOperatingDate());
               setError("");
               setDialog(true);
             }}
@@ -307,7 +303,7 @@ export function WorkspaceCalendar({
             ) : (
               <div className="workspace-empty">
                 <h3>No events this month</h3>
-                <p>Add a local planning event, or move to the demo month.</p>
+                <p>Add a personal planning note, or select a different month.</p>
               </div>
             )}
           </div>

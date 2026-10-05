@@ -31,6 +31,7 @@ import { proofOfDeliveries } from './proofs';
 import { discrepancyClaims } from './discrepancies';
 import { storeReceipts } from './receiving';
 import { deliveryPlans, planVersions } from './plans';
+import { loadingManifests, loadingExceptions } from './loading';
 
 export const depotsRelations = relations(depots, ({ many }) => ({
   outlets: many(outlets),
@@ -139,6 +140,16 @@ export const tripsRelations = relations(trips, ({ one, many }) => ({
     references: [users.id],
   }),
   stops: many(tripStops),
+  loadingManifests: many(loadingManifests),
+}));
+
+export const loadingManifestsRelations = relations(loadingManifests, ({ one, many }) => ({
+  trip: one(trips, { fields: [loadingManifests.tripId], references: [trips.id] }),
+  exceptions: many(loadingExceptions),
+}));
+
+export const loadingExceptionsRelations = relations(loadingExceptions, ({ one }) => ({
+  manifest: one(loadingManifests, { fields: [loadingExceptions.manifestId], references: [loadingManifests.id] }),
 }));
 
 export const deliveryPlansRelations = relations(deliveryPlans, ({ one, many }) => ({

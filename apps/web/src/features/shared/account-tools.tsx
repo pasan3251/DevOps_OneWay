@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Check, LoaderCircle, MessageSquare, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, Check, LoaderCircle, LogOut, MessageSquare, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { authService, type Session } from "@/features/auth/auth-service";
@@ -18,12 +19,14 @@ type Notification = {
 };
 
 export function SharedAccountTools({ session, compact = true }: { session: Session; compact?: boolean }) {
+  const router = useRouter();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notificationError, setNotificationError] = useState("");
   const [profile, setProfile] = useState(session);
   const [firstName, setFirstName] = useState(session.name.split(" ")[0] ?? "");
   const [lastName, setLastName] = useState(session.name.split(" ").slice(1).join(" "));
@@ -32,9 +35,17 @@ export function SharedAccountTools({ session, compact = true }: { session: Sessi
   const unread = notifications.filter((notification) => !notification.isRead).length;
 
   useEffect(() => {
-    void apiRequest<Notification[]>("/notifications")
-      .then(setNotifications)
-      .catch(() => undefined);
+    let disposed = false;
+    const load = () => {
+      if (document.hidden) return;
+      void apiRequest<Notification[]>("/notifications")
+        .then((rows) => { if (!disposed) { setNotifications(rows); setNotificationError(""); } })
+        .catch((cause: unknown) => { if (!disposed) setNotificationError(cause instanceof Error ? cause.message : "Notifications could not be loaded."); });
+    };
+    load();
+    const interval = window.setInterval(load, 30_000);
+    document.addEventListener("visibilitychange", load);
+    return () => { disposed = true; window.clearInterval(interval); document.removeEventListener("visibilitychange", load); };
   }, []);
 
   async function openNotifications() {
@@ -42,9 +53,9 @@ export function SharedAccountTools({ session, compact = true }: { session: Sessi
     setLoading(true);
     try {
       setNotifications(await apiRequest<Notification[]>("/notifications"));
-      setError("");
+      setNotificationError("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Notifications could not be loaded.");
+      setNotificationError(cause instanceof Error ? cause.message : "Notifications could not be loaded.");
     } finally {
       setLoading(false);
     }
@@ -55,7 +66,30 @@ export function SharedAccountTools({ session, compact = true }: { session: Sessi
       await apiRequest(`/notifications/${id}/read`, { method: "POST" });
       setNotifications((current) => current.map((notification) => notification.id === id ? { ...notification, isRead: true } : notification));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Notification could not be marked as read.");
+      setNotificationError(cause instanceof Error ? cause.message : "Notification could not be marked as read.");
+    }
+  }
+
+  async function openProfile() {
+    setProfileOpen(true);
+    try {
+      const refreshed = await authService.refreshProfile();
+      setProfile(refreshed);
+      setFirstName(refreshed.name.split(" ")[0] ?? "");
+      setLastName(refreshed.name.split(" ").slice(1).join(" "));
+      setPhone(refreshed.phone ?? "");
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Profile could not be loaded.");
+    }
+  }
+
+  function signOut() {
+    try {
+      authService.signOut();
+      router.replace("/login");
+    } catch {
+      setError("Your session could not be cleared. Try signing out again.");
     }
   }
 
@@ -79,14 +113,14 @@ export function SharedAccountTools({ session, compact = true }: { session: Sessi
 
   return (
     <>
-      <button type="button" className={compact ? "dispatch-icon-button" : "workspace-action"} aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} onClick={() => void openNotifications()}>
+      <button type="button" className={compact ? "dispatch-icon-button" : "workspace-action"} aria-label={notificationError ? "Notifications unavailable, open to retry" : `Notifications${unread ? `, ${unread} unread` : ""}`} title={notificationError || undefined} onClick={() => void openNotifications()}>
         <Bell size={18} aria-hidden="true" />
         {!compact && <span>Notifications</span>}
         {unread > 0 && <span className="nav-count">{unread}</span>}
       </button>
-      <button type="button" className={compact ? "dispatch-icon-button" : "workspace-action"} aria-label="Open profile" onClick={() => setProfileOpen(true)}>
+      <button type="button" className={compact ? "dispatch-icon-button" : "workspace-action"} aria-label="Open profile and account" onClick={() => void openProfile()}>
         <UserRound size={18} aria-hidden="true" />
-        {!compact && <span>Profile</span>}
+        {!compact && <span>Profile &amp; account</span>}
       </button>
       <button type="button" className={compact ? "dispatch-icon-button" : "workspace-action"} aria-label="Open messages" onClick={() => setMessagesOpen(true)}>
         <MessageSquare size={18} aria-hidden="true" />
@@ -113,21 +147,22 @@ export function SharedAccountTools({ session, compact = true }: { session: Sessi
                 </div>
               </article>
             ))}
-            {!loading && !notifications.length && <p className="text-sm text-muted-foreground">No notifications yet.</p>}
-            {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+            {!loading && !notifications.length && !notificationError && <p className="text-sm text-muted-foreground">No notifications yet.</p>}
+            {notificationError && <p className="text-sm text-destructive" role="alert">{notificationError}</p>}
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
         <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader><DialogTitle>Profile</DialogTitle><DialogDescription>{profile.email} · {profile.role.replace("-", " ")} · {profile.location}</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Profile &amp; account</DialogTitle><DialogDescription>{profile.email} · {profile.role.replace("-", " ")} · {profile.location}</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <label className="grid gap-1 text-sm">First name<input className="rounded-md border bg-background px-3 py-2" value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
             <label className="grid gap-1 text-sm">Last name<input className="rounded-md border bg-background px-3 py-2" value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
             <label className="grid gap-1 text-sm">Phone<input className="rounded-md border bg-background px-3 py-2" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+94…" /></label>
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
             <Button className="w-full" disabled={saving || !firstName.trim() || !lastName.trim()} onClick={() => void saveProfile()}>{saving ? "Saving…" : "Save profile"}</Button>
+            <Button className="w-full" variant="outline" onClick={signOut}><LogOut size={16} />Sign out</Button>
           </div>
         </DialogContent>
       </Dialog>

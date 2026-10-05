@@ -201,8 +201,9 @@ export class DriverService {
     const [updated] = await this.db
       .update(schema.trips)
       .set({ status: 'DRIVER_READY', driverReadyAt: now, driverChecklist: dto, updatedAt: now })
-      .where(eq(schema.trips.id, tripId))
+      .where(and(eq(schema.trips.id, tripId), eq(schema.trips.status, 'CLEARED')))
       .returning();
+    if (!updated) throw new ConflictException('Departure clearance changed. Reload the assigned trip.');
     await this.auditService?.record({
       actorId: userId,
       actorRole: 'driver',
@@ -251,8 +252,9 @@ export class DriverService {
       const [updatedTrip] = await tx
         .update(schema.trips)
         .set({ status: 'EN_ROUTE', actualDepartureTime: now, updatedAt: now })
-        .where(eq(schema.trips.id, tripId))
+        .where(and(eq(schema.trips.id, tripId), eq(schema.trips.status, 'DRIVER_READY')))
         .returning();
+      if (!updatedTrip) throw new ConflictException('Driver readiness or departure clearance changed. Reload the assigned trip.');
       await tx.update(schema.vehicles).set({ status: 'in_transit', updatedAt: now }).where(eq(schema.vehicles.id, trip.vehicleId));
       await tx.update(schema.drivers).set({ status: 'on_trip', updatedAt: now }).where(eq(schema.drivers.id, driver.id));
       if (orderIds.length) {

@@ -16,7 +16,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import type { StopItem } from "../driver-types";
-import { formatMinutesToTime } from "../driver-data";
+import { formatMinutesToTime } from "../driver-format";
 import { Button } from "@/components/ui/button";
 
 interface DriverStopDetailProps {
