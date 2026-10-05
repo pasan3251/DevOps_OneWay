@@ -29,8 +29,8 @@ export class HealthController {
     try {
       await this.pool.query('SELECT 1');
       dbStatus = 'up';
-    } catch (err: any) {
-      dbStatus = `down: ${err.message}`;
+    } catch (error: unknown) {
+      dbStatus = `down: ${error instanceof Error ? error.message : 'unknown database error'}`;
     }
 
     const isReady = dbStatus === 'up';

@@ -175,9 +175,12 @@ export function LoaderDashboard() {
 
   useEffect(() => {
     if (!session) return;
-    void reloadLoader().catch((error: unknown) => {
-      setFailure(error instanceof Error ? error.message : "Published manifests could not be loaded.");
-    });
+    const timer = window.setTimeout(() => {
+      void reloadLoader().catch((error: unknown) => {
+        setFailure(error instanceof Error ? error.message : "Published manifests could not be loaded.");
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [reloadLoader, session]);
 
   useEffect(() => {
@@ -214,7 +217,7 @@ export function LoaderDashboard() {
     }
   }
 
-  async function handleClearDeparture(tripId: string, clearance: ClearanceRecord) {
+  async function handleClearDeparture(tripId: string) {
     const recordId = plan.trips.find((trip) => trip.id === tripId)?.recordId;
     if (!recordId) {
       setFailure("The published trip could not be found.");
@@ -487,11 +490,7 @@ export function LoaderDashboard() {
           )}
 
           {view === "chat" && (
-            <WorkspaceChat
-              state={workspace}
-              depot={depot}
-              onSave={saveWorkspace}
-            />
+            <WorkspaceChat />
           )}
         </main>
       </div>

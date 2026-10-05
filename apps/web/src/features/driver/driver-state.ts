@@ -342,7 +342,12 @@ export function useDriverState() {
   }, []);
 
   useEffect(() => {
-    void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "The assigned route could not be loaded.")).finally(() => setIsLoading(false));
+    const timer = window.setTimeout(() => {
+      void reload()
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "The assigned route could not be loaded."))
+        .finally(() => setIsLoading(false));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [reload]);
 
   useEffect(() => { window.localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(syncQueue)); }, [syncQueue]);

@@ -217,7 +217,9 @@ export function DispatcherDashboard() {
   }, [router]);
 
   useEffect(() => {
-    if (session) void reloadPlanning();
+    if (!session) return;
+    const timer = window.setTimeout(() => void reloadPlanning(), 0);
+    return () => window.clearTimeout(timer);
   }, [reloadPlanning, session]);
 
   useEffect(() => {
@@ -856,11 +858,7 @@ export function DispatcherDashboard() {
               }}
             />
           ) : view === "chat" ? (
-            <WorkspaceChat
-              state={workspace}
-              depot={depot}
-              onSave={saveWorkspace}
-            />
+            <WorkspaceChat />
           ) : view === "routes" ? (
             <div className="route-planning-workspace">
               <Tabs

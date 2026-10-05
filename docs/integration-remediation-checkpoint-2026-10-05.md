@@ -15,7 +15,9 @@ This checkpoint preserves the active implementation context before integrating t
 - Rebuilt store receipt confirmation/discrepancy handling and replaced the store dashboard’s operational demo fallback with the API.
 - Added one shared persisted messages service/UI, shared notifications, and shared editable profile tools across role workspaces.
 - Loader, driver, dispatcher, and store UI data paths now use the shared authenticated API client.
-- API build and web typecheck passed immediately before this checkpoint.
+- Merged `origin/fix/docker-and-tests` after reviewing every changed file. Kept its Docker orchestration and web image, removed the nonexistent automatic seed command, replaced placeholder workflow tests, and rewrote the obsolete local-demo testing guide for the persisted API workflow.
+- Regenerated migration `0002_neat_revanche.sql` from the final schema and updated the seed cleanup order for all newly persisted workflow tables.
+- API and web production builds, web lint, web typecheck, and all API tests pass at this checkpoint.
 
 ## Important merge decisions
 
@@ -28,20 +30,22 @@ This checkpoint preserves the active implementation context before integrating t
 
 ## Known unfinished work after branch integration
 
-1. Regenerate migration `0002` from the final merged schema. The currently generated `0002_tense_felicia_hardy.sql` and snapshot predate the latest schema edits.
-2. Update seed cleanup/order and add coherent plan/version/manifest lifecycle data for real multi-role browser verification.
-3. Add/expand cross-role lifecycle integration tests: store order -> dispatch plan/publish -> loader verify/clear -> driver execute/POD -> store receipt, including revision and offline-conflict scenarios.
-4. Expand API tests beyond the current passing suite with a real cross-role lifecycle scenario.
-5. Run API/web lint, full production builds, migration/seed, and browser QA for every role.
+1. Add coherent plan/version/manifest lifecycle seed data for real multi-role browser verification.
+2. Add a database-backed lifecycle integration test: store order -> dispatch plan/publish -> loader verify/clear -> driver execute/POD -> store receipt, including revision and offline-conflict scenarios. The new workflow suite currently verifies the public cross-role state/endpoint contract without a live database.
+3. Run the generated migration and seed against a fresh PostgreSQL instance, then perform browser QA for every role.
+4. Validate the Compose stack on a machine with Docker; Docker is not installed in the current environment.
+5. Add the API's missing ESLint dependency/configuration or remove its nonfunctional lint script. Web lint is clean; the API lint command currently cannot find ESLint.
 6. Remove remaining “demo” copy and review any purely preference-level browser storage. Operational state must remain server-owned.
 7. Review remaining dispatcher calendar/workspace helpers, generated route-preview assumptions, and any obsolete seeded driver data imports/files.
-8. Commit and push the reconciled result after verification.
+8. Push the reconciled result after verification.
 
 ## Current verification status
 
 - `npm run typecheck`: passed.
-- `npm run build:api`: passed.
-- `npm run test:api`: passed, 29/29.
+- `npm run lint`: passed (web).
+- `npm run build`: passed (web and API production builds).
+- `npm run test:api`: passed, 34/34.
+- `npm --prefix apps/api run lint`: unavailable because the API package declares a lint script but does not include ESLint or an ESLint configuration.
 
 ## Workspace caution
 

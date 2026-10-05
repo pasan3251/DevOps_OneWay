@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, Search, Send } from "lucide-react";
 import { authService } from "@/features/auth/auth-service";
 import { apiRequest } from "@/lib/api-client";
-import type { WorkspaceState } from "./workspace-state";
-import type { Depot } from "./planning";
 
 type Participant = {
   id: string;
@@ -39,17 +37,11 @@ type DirectoryEntry = {
   participantIds: string[];
 };
 
-type WorkspaceChatProps = {
-  state?: WorkspaceState;
-  depot?: Depot;
-  onSave?: (value: WorkspaceState, feedback: string) => boolean;
-};
-
 function roleLabel(role: string) {
   return role.replace("store_manager", "store manager").replaceAll("_", " ");
 }
 
-export function WorkspaceChat(_props: WorkspaceChatProps) {
+export function WorkspaceChat() {
   const session = authService.getSession();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<Participant[]>([]);
@@ -73,9 +65,12 @@ export function WorkspaceChat(_props: WorkspaceChatProps) {
   }, []);
 
   useEffect(() => {
-    void loadDirectory()
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Conversations could not be loaded."))
-      .finally(() => setLoading(false));
+    const timer = window.setTimeout(() => {
+      void loadDirectory()
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Conversations could not be loaded."))
+        .finally(() => setLoading(false));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadDirectory]);
 
   const entries = useMemo<DirectoryEntry[]>(() => {
@@ -106,16 +101,20 @@ export function WorkspaceChat(_props: WorkspaceChatProps) {
   const selected = entries.find((entry) => entry.id === selectedId) ?? filtered[0] ?? null;
 
   useEffect(() => {
-    if (!selected?.conversationId) {
-      setMessages([]);
-      return;
-    }
-    void apiRequest<Message[]>(`/messages/conversations/${selected.conversationId}`)
-      .then((rows) => {
-        setMessages(rows);
-        return apiRequest(`/messages/conversations/${selected.conversationId}/read`, { method: "POST" });
-      })
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Message history could not be loaded."));
+    const conversationId = selected?.conversationId;
+    const timer = window.setTimeout(() => {
+      if (!conversationId) {
+        setMessages([]);
+        return;
+      }
+      void apiRequest<Message[]>(`/messages/conversations/${conversationId}`)
+        .then((rows) => {
+          setMessages(rows);
+          return apiRequest(`/messages/conversations/${conversationId}/read`, { method: "POST" });
+        })
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Message history could not be loaded."));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [selected?.conversationId]);
 
   useEffect(() => {

@@ -15,12 +15,23 @@ async function seed() {
   try {
     console.log('[Seed] Clearing existing demo data...');
     // Clear child tables first in reverse dependency order
+    await db.delete(schema.messageReadStates);
+    await db.delete(schema.messages);
+    await db.delete(schema.conversationParticipants);
+    await db.delete(schema.conversations);
+    await db.delete(schema.notifications);
+    await db.delete(schema.syncConflicts);
     await db.delete(schema.clientMutations);
     await db.delete(schema.auditLogs);
+    await db.delete(schema.loadingExceptions);
+    await db.delete(schema.storeReceipts);
     await db.delete(schema.discrepancyClaims);
     await db.delete(schema.proofOfDeliveries);
+    await db.delete(schema.loadingManifests);
     await db.delete(schema.tripStops);
     await db.delete(schema.trips);
+    await db.delete(schema.planVersions);
+    await db.delete(schema.deliveryPlans);
     await db.delete(schema.orderItems);
     await db.delete(schema.orders);
     await db.delete(schema.distanceDurationMatrix);

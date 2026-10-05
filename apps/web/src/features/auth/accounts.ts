@@ -12,7 +12,7 @@ export const demoAccounts = [
     label: "Dispatcher",
     name: "Dispatch team",
     employeeId: "DISP001",
-    email: "dispatcher@waypoint.demo",
+    email: "dispatcher@waypoint.lk",
     context: "Planning office",
     location: "Peliyagoda",
     description: "Plan deliveries, allocate the fleet, and manage exceptions.",
@@ -22,7 +22,7 @@ export const demoAccounts = [
     label: "Loader",
     name: "Warehouse team",
     employeeId: "LOAD001",
-    email: "loader@waypoint.demo",
+    email: "loader.cmb@waypoint.lk",
     context: "Warehouse dock",
     location: "Peliyagoda",
     description:
@@ -33,7 +33,7 @@ export const demoAccounts = [
     label: "Driver",
     name: "Delivery team",
     employeeId: "DRIV001",
-    email: "driver@waypoint.demo",
+    email: "driver.sunil@waypoint.lk",
     context: "On the road",
     location: "Assigned route",
     description: "Follow your trip and record delivery outcomes and proof.",
@@ -43,7 +43,7 @@ export const demoAccounts = [
     label: "Store manager",
     name: "Store team",
     employeeId: "STORE001",
-    email: "store@waypoint.demo",
+    email: "manager.fresh1@waypoint.lk",
     context: "Retail outlet",
     location: "Assigned outlet",
     description: "Place orders, review arrival times, and confirm receipt.",
@@ -59,7 +59,7 @@ export const demoAccounts = [
   description: string;
 }>;
 
-export const DEMO_PASSWORD = "waypoint-demo";
+export const DEMO_PASSWORD = "Password123!";
 export const demoLoginEnabled =
   process.env.NODE_ENV !== "production" &&
   process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN !== "false";

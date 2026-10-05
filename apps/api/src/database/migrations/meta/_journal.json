@@ -15,6 +15,13 @@
       "when": 1791131034903,
       "tag": "0001_rapid_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791169780026,
+      "tag": "0002_neat_revanche",
+      "breakpoints": true
     }
   ]
 }
